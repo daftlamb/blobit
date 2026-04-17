@@ -1086,7 +1086,7 @@ function exportPNG(){
 
 function exportSVG(){
   const ab=artboard;
-  const chains=getChains(false);if(!chains||!chains.length) return;
+  const chains=getChains(false)||[];
   const fo=p('opacity')/100,strokeOn=pck('stroke'),sw=p('swidth'),so=p('sopacity')/100;
   function pathD(pts){
     if(pts.length<2) return '';
@@ -1098,11 +1098,22 @@ function exportSVG(){
     return d+` L${pts[pts.length-1].x.toFixed(1)},${pts[pts.length-1].y.toFixed(1)} Z`;
   }
   const d=chains.map(c=>pathD(c)).join(' ');
+  // edge strokes as polylines
+  function edgePathD(pts){
+    if(pts.length<2) return '';
+    let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+    for(let i=1;i<pts.length;i++) d+=` L${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`;
+    return d;
+  }
+  const edgePaths=(ab.edgeStrokes&&ab.edgeStrokes.length)
+    ? ab.edgeStrokes.map(s=>`<path d="${edgePathD(s)}" fill="none" stroke="${fillColor}" stroke-width="1" stroke-opacity="0.85" stroke-linejoin="round" stroke-linecap="round"/>`).join('\n')
+    : '';
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${ab.w}" height="${ab.h}">
 <rect width="100%" height="100%" fill="#fff"/>
-<path d="${d}" fill="${fo>0?fillColor:'none'}" fill-opacity="${fo}" fill-rule="evenodd"
+${d?`<path d="${d}" fill="${fo>0?fillColor:'none'}" fill-opacity="${fo}" fill-rule="evenodd"
   stroke="${strokeOn?strokeColor:'none'}" stroke-width="${strokeOn?sw:0}"
-  stroke-opacity="${so}" stroke-linejoin="round" stroke-linecap="round"/>
+  stroke-opacity="${so}" stroke-linejoin="round" stroke-linecap="round"/>`:''}
+${edgePaths}
 </svg>`;
   const blob=new Blob([svg],{type:'image/svg+xml'});
   const a=document.createElement('a');a.download='blobit.svg';a.href=URL.createObjectURL(blob);a.click();
