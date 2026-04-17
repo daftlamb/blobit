@@ -381,6 +381,7 @@ function setTool(t){
     document.getElementById('btn-'+n)?.classList.toggle('active',t===n);
     document.getElementById('m-btn-'+n)?.classList.toggle('active',t===n);
   });
+  isPanning=false;warpDrag=null;isDrawing=false;
   area.style.cursor=t==='draw'?'crosshair':'default';
   scheduleRender();
 }
@@ -556,7 +557,7 @@ function onMove(e){
 
 function onEnd(){
   if(isPanning){isPanning=false;area.style.cursor=spaceDown?'grab':currentTool==='draw'?'crosshair':'default';}
-  if(warpDrag!==null){warpDrag=null;return;}
+  if(warpDrag!==null){warpDrag=null;scheduleRender();return;}
   if(!isDrawing) return;
   if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
   holdActive=false;
@@ -643,44 +644,31 @@ function gaussianBlur(gray,w,h,sigma){
   return out;
 }
 
-// DoG (Difference of Gaussians) + local adaptive contrast edge detection
-// Much more sensitive to fine detail and texture than plain Canny
-function detectEdges(imgData, sensitivity, detail, sigma){
+// Edge detection: DoG (fine texture) + Sobel NMS (strong edges) + local contrast normalization
+function detectEdges(imgData,sensitivity,detail,sigma){
   const w=imgData.width,h=imgData.height,d=imgData.data;
+  // luminance
   const lum=new Float32Array(w*h);
   for(let i=0;i<w*h;i++) lum[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
 
-  // DoG: blur with two sigmas, subtract -> zero-crossings = edges
-  const s1=Math.max(0.5,sigma);
-  const s2=s1*1.6; // classic DoG ratio
+  const s1=Math.max(0.5,sigma), s2=s1*1.6;
   const b1=gaussianBlur(lum,w,h,s1);
   const b2=gaussianBlur(lum,w,h,s2);
+
+  // DoG response (fine detail)
   const dog=new Float32Array(w*h);
-  for(let i=0;i<w*h;i++) dog[i]=b1[i]-b2[i];
+  for(let i=0;i<w*h;i++) dog[i]=Math.abs(b1[i]-b2[i]);
 
-  // local contrast normalization: divide by local std dev so dark/flat areas get boosted
-  const localR=Math.max(2,Math.round(s2*3));
-  const localBlur=gaussianBlur(lum,w,h,localR);
-  const localContrast=new Float32Array(w*h);
-  for(let y=localR;y<h-localR;y++) for(let x=localR;x<w-localR;x++){
-    let sum2=0,cnt=0;
-    for(let dy=-localR;dy<=localR;dy+=2) for(let dx=-localR;dx<=localR;dx+=2){
-      const v=lum[(y+dy)*w+(x+dx)]-localBlur[y*w+x];
-      sum2+=v*v;cnt++;
-    }
-    localContrast[y*w+x]=Math.sqrt(sum2/cnt)+1;
+  // local std-dev for contrast normalization (boost low-contrast areas)
+  const localSig=Math.max(3,Math.round(s2*4));
+  const localMean=gaussianBlur(lum,w,h,localSig);
+  const localVar=new Float32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i=y*w+x,v=lum[i]-localMean[i];localVar[i]=v*v;
   }
+  const localStd=gaussianBlur(localVar,w,h,localSig);
 
-  // normalized DoG response
-  const resp=new Float32Array(w*h);
-  let maxR=0;
-  for(let i=0;i<w*h;i++){
-    resp[i]=Math.abs(dog[i])/(localContrast[i]+0.5);
-    if(resp[i]>maxR) maxR=resp[i];
-  }
-  if(maxR<0.001) return new Uint8Array(w*h);
-
-  // also compute Sobel on original for strong structural edges
+  // Sobel on b1 for structural edges
   const mag=new Float32Array(w*h),ang=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
     const gx=-b1[(y-1)*w+(x-1)]-2*b1[y*w+(x-1)]-b1[(y+1)*w+(x-1)]
@@ -689,10 +677,7 @@ function detectEdges(imgData, sensitivity, detail, sigma){
              +b1[(y+1)*w+(x-1)]+2*b1[(y+1)*w+x]+b1[(y+1)*w+(x+1)];
     mag[y*w+x]=Math.sqrt(gx*gx+gy*gy);ang[y*w+x]=Math.atan2(gy,gx);
   }
-  let maxM=0;for(let i=0;i<w*h;i++) if(mag[i]>maxM) maxM=mag[i];
-  if(maxM<0.001) maxM=1;
-
-  // NMS on Sobel
+  // NMS
   const nms=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
     const m=mag[y*w+x],deg=((ang[y*w+x]*180/Math.PI)%180+180)%180;
@@ -704,29 +689,46 @@ function detectEdges(imgData, sensitivity, detail, sigma){
     nms[y*w+x]=(m>=n1&&m>=n2)?m:0;
   }
 
-  // combine: DoG catches fine texture, Sobel catches strong edges
-  // sensitivity controls overall threshold, detail controls DoG vs Sobel blend
-  const detailBlend=detail/100; // 0=Sobel only, 1=DoG dominant
+  // normalize both signals 0-1
+  let maxNMS=0,maxDOG=0;
+  for(let i=0;i<w*h;i++){if(nms[i]>maxNMS)maxNMS=nms[i];if(dog[i]>maxDOG)maxDOG=dog[i];}
+  if(maxNMS<1) maxNMS=1; if(maxDOG<0.001) maxDOG=1;
+
+  // blend: detail=0 -> pure Sobel, detail=100 -> 50/50 + local contrast boost
+  const db=detail/100;
   const combined=new Float32Array(w*h);
   for(let i=0;i<w*h;i++){
-    combined[i]=(nms[i]/maxM)*(1-detailBlend*0.5)+(resp[i]/maxR)*detailBlend;
+    const sobelN=nms[i]/maxNMS;
+    const dogN=dog[i]/maxDOG;
+    // local contrast boost: amplify where local std is low (flat areas get boosted)
+    const lcBoost=1/(Math.sqrt(localStd[i])/32+1);
+    combined[i]=sobelN*(1-db*0.4)+dogN*db*lcBoost;
   }
 
-  const highT=(1-sensitivity/100)*0.55+0.05;
-  const lowT=highT*0.35;
+  // adaptive threshold based on histogram percentile
+  const hist=new Int32Array(1000);
+  for(let i=0;i<w*h;i++) hist[Math.min(999,Math.floor(combined[i]*999))]++;
+  const total=w*h;
+  // sensitivity=100 -> keep top 15%, sensitivity=0 -> keep top 1%
+  const keepFrac=0.01+sensitivity/100*0.14;
+  let cumul=0,highBin=999;
+  for(let b=999;b>=0;b--){cumul+=hist[b];if(cumul/total>=keepFrac){highBin=b;break;}}
+  const highT=highBin/999;
+  const lowT=highT*0.4;
+
   const STRONG=2,WEAK=1,edge=new Uint8Array(w*h);
   for(let i=0;i<w*h;i++){
-    if(combined[i]>=highT) edge[i]=STRONG;
-    else if(combined[i]>=lowT) edge[i]=WEAK;
+    if(combined[i]>=highT)edge[i]=STRONG;
+    else if(combined[i]>=lowT)edge[i]=WEAK;
   }
   const queue=[];
   for(let i=0;i<w*h;i++) if(edge[i]===STRONG) queue.push(i);
-  const dx8=[-1,0,1,-1,1,-1,0,1],dy8=[-1,-1,-1,0,0,1,1,1];
+  const dx8=[-1,0,1,-1,1,-1,0,1];
   let qi=0;
   while(qi<queue.length){
     const idx=queue[qi++],y=Math.floor(idx/w),x=idx%w;
     for(let k=0;k<8;k++){
-      const nx=x+dx8[k],ny=y+dy8[k];
+      const nx=x+dx8[k],ny=y+(k<3?-1:k<5?0:1);
       if(nx<0||nx>=w||ny<0||ny>=h) continue;
       const ni=ny*w+nx;if(edge[ni]===WEAK){edge[ni]=STRONG;queue.push(ni);}
     }
