@@ -202,7 +202,7 @@ function buildField(pts, r, noiseAmt, cols, rows, step) {
   const cutoff2 = 4*r*r;
   const grid = new Float32Array(cols*rows);
   const noiseScale = r * 1.8; // spatial frequency of noise (in pixels)
-  const noiseDisp = noiseAmt * r * 0.55; // max displacement in pixels
+  const noiseDisp = noiseAmt * r * 0.28; // keep small to avoid isoline folding
 
   for (let i = 0; i < pts.length; i++) {
     const px = pts[i].x, py = pts[i].y;
@@ -214,9 +214,9 @@ function buildField(pts, r, noiseAmt, cols, rows, step) {
       for (let col = c0; col <= c1; col++) {
         let sx = col * step, sy = row * step;
         if (noiseDisp > 0) {
-          // use pixel coords divided by scale for proper frequency
-          sx += snoise(sx / noiseScale, sy / noiseScale, 1.0) * noiseDisp;
-          sy += snoise((sx / noiseScale) + 31.41, (sy / noiseScale) + 27.18, 1.0) * noiseDisp;
+          const nx = col / (noiseScale / step), ny = row / (noiseScale / step);
+          sx += snoise(nx, ny, 1.0) * noiseDisp;
+          sy += snoise(nx + 31.41, ny + 27.18, 1.0) * noiseDisp;
         }
         const dx = sx - px, dy = sy - py, d2 = dx*dx + dy*dy;
         if (d2 < cutoff2) grid[row*cols+col] += (1 - d2/cutoff2)**2;
