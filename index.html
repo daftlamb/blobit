@@ -774,6 +774,7 @@ function traceChains(edge,w,h,minLen){
 
 function applyImageEdge(){
   if(!uploadedImage) return;
+  artboard.bgImage=uploadedImage;
   const ab=artboard;
   const oc=document.createElement('canvas');
   const scale=Math.min(ab.w/uploadedImage.width,ab.h/uploadedImage.height);
@@ -979,8 +980,9 @@ function render(live){
   // artboard shadow + white bg
   ctx.save();
   ctx.shadowColor='rgba(0,0,0,0.10)';ctx.shadowBlur=24;ctx.shadowOffsetY=6;
-  ctx.fillStyle='#fff';ctx.fillRect(sx,sy,sw,sh);
+  ctx.fillStyle='#fff';ctx.fillRect(sx,sy,sw,sh);if(artboard.bgImage){const _bi=artboard.bgImage;const _bs=Math.min(artboard.w/_bi.width,artboard.h/_bi.height);const _bw=_bi.width*_bs,_bh=_bi.height*_bs;const _bx=artboard.x+(artboard.w-_bw)/2,_by=artboard.y+(artboard.h-_bh)/2;ctx.globalAlpha=0.9;ctx.drawImage(_bi,_bx,_by,_bw,_bh);ctx.globalAlpha=1;};
   ctx.restore();
+  if(artboard.bgImage){const bi=artboard.bgImage;const bscale=Math.min(artboard.w/bi.width,artboard.h/bi.height);const bw=bi.width*bscale,bh=bi.height*bscale;const bx=artboard.x+(artboard.w-bw)/2,by=artboard.y+(artboard.h-bh)/2;ctx.globalAlpha=0.85;ctx.drawImage(bi,bx+sx-artboard.x*vscale,by+sy-artboard.y*vscale,bw*vscale,bh*vscale);ctx.globalAlpha=1;}
 
   // clip + draw blobs
   const chains=getChains(live);
