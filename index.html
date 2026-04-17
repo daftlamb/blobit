@@ -89,7 +89,7 @@ input[type=range] { width:100%; accent-color:#1a1a1a; margin-bottom:6px; height:
       <input type="range" id="sl-wradius" min="20" max="300" value="80">
       <div class="param-row"><label>Strength</label><span id="val-wstrength">60</span></div>
       <input type="range" id="sl-wstrength" min="1" max="100" value="60">
-      <p class="hint">Draw blobs first, then switch to Warp and tap to place points. Right-click / long-press to remove.</p>
+      <p class="hint">Switch to Warp mode, tap to place · right-click / long-press to remove</p>
     </div>
     <div class="divider"></div>
     <div class="panel-section">
@@ -409,19 +409,22 @@ function buildField(pts,r,cols,rows,step){
   return grid;
 }
 
-// warp: per-cell local threshold reduction — directly visible effect
-function getLocalThreshMult(col,row,step,thresh,wpts){
-  if(!wpts.length) return thresh;
-  const wx=col*step,wy=row*step;
-  let reduction=0;
+// warp: inject energy into field — same kernel as blob points, scaled by strength
+// this guarantees the isosurface bulges outward without ever causing broken faces
+function applyWarpToField(grid,cols,rows,step,wpts,thresh){
   for(const wp of wpts){
-    const dx=wx-wp.x,dy=wy-wp.y,d2=dx*dx+dy*dy,r2=wp.r*wp.r;
-    if(d2>=r2) continue;
-    const falloff=(1-d2/r2)**2;
-    // reduce threshold by up to 80% at center
-    reduction=Math.max(reduction,falloff*wp.strength*0.8);
+    const wr=wp.r,s=wp.strength;
+    const c0=Math.max(0,Math.floor((wp.x-wr)/step)),c1=Math.min(cols-1,Math.ceil((wp.x+wr)/step));
+    const r0=Math.max(0,Math.floor((wp.y-wr)/step)),r1=Math.min(rows-1,Math.ceil((wp.y+wr)/step));
+    const cutoff2=wr*wr;
+    for(let row=r0;row<=r1;row++) for(let col=c0;col<=c1;col++){
+      const dx=col*step-wp.x,dy=row*step-wp.y,d2=dx*dx+dy*dy;
+      if(d2>=cutoff2) continue;
+      const falloff=(1-d2/cutoff2)**2;
+      // inject enough to push above threshold at center, smooth falloff at edge
+      grid[row*cols+col]+=falloff*s*thresh*2.5;
+    }
   }
-  return thresh*(1-reduction);
 }
 
 function warpedSample(grid,cols,rows,col,row,nd,nf){
@@ -434,25 +437,20 @@ function warpedSample(grid,cols,rows,col,row,nd,nf){
   return(grid[rr0*cols+cc0]*(1-fc)+grid[rr0*cols+cc1]*fc)*(1-fr)
         +(grid[rr1*cols+cc0]*(1-fc)+grid[rr1*cols+cc1]*fc)*fr;
 }
-
-// marching squares with per-cell local threshold
-function march(grid,cols,rows,step,thresh,nd,nf,wpts){
-  const segs=[];
-  const sv=(c,r)=>warpedSample(grid,cols,rows,c,r,nd,nf);
-  const interp=(ax,ay,bx,by,va,vb,t)=>{const f=(t-va)/(vb-va);return{x:ax+(bx-ax)*f,y:ay+(by-ay)*f};};
+function march(grid,cols,rows,step,thresh,nd,nf){
+  const segs=[],sv=(c,r)=>warpedSample(grid,cols,rows,c,r,nd,nf);
+  const interp=(ax,ay,bx,by,va,vb)=>{const t=(thresh-va)/(vb-va);return{x:ax+(bx-ax)*t,y:ay+(by-ay)*t};};
   for(let r=0;r<rows-1;r++) for(let c=0;c<cols-1;c++){
     const x=c*step,y=r*step,x1=x+step,y1=y+step;
-    // local threshold for this cell
-    const lt=wpts.length?getLocalThreshMult(c,r,step,thresh,wpts):thresh;
     const v00=sv(c,r),v10=sv(c+1,r),v01=sv(c,r+1),v11=sv(c+1,r+1);
-    const idx=(v00>lt?8:0)|(v10>lt?4:0)|(v11>lt?2:0)|(v01>lt?1:0);
+    const idx=(v00>thresh?8:0)|(v10>thresh?4:0)|(v11>thresh?2:0)|(v01>thresh?1:0);
     if(idx===0||idx===15) continue;
-    const T=interp(x,y,x1,y,v00,v10,lt),R=interp(x1,y,x1,y1,v10,v11,lt);
-    const B=interp(x,y1,x1,y1,v01,v11,lt),L=interp(x,y,x,y1,v00,v01,lt);
+    const T=interp(x,y,x1,y,v00,v10),R=interp(x1,y,x1,y1,v10,v11);
+    const B=interp(x,y1,x1,y1,v01,v11),L=interp(x,y,x,y1,v00,v01);
     if(idx===5||idx===10){
       const center=(v00+v10+v01+v11)*0.25;
-      if(idx===5){if(center>lt){segs.push([T,R],[B,L]);}else{segs.push([T,L],[R,B]);}}
-      else{if(center>lt){segs.push([T,L],[R,B]);}else{segs.push([T,R],[B,L]);}}
+      if(idx===5){if(center>thresh){segs.push([T,R],[B,L]);}else{segs.push([T,L],[R,B]);}}
+      else{if(center>thresh){segs.push([T,L],[R,B]);}else{segs.push([T,R],[B,L]);}}
       continue;
     }
     const tbl={1:[[B,L]],2:[[R,B]],3:[[R,L]],4:[[T,R]],6:[[T,B]],7:[[T,L]],
@@ -503,19 +501,23 @@ function smoothPath(pts){
 function hexToRgb(hex){return{r:parseInt(hex.slice(1,3),16),g:parseInt(hex.slice(3,5),16),b:parseInt(hex.slice(5,7),16)};}
 function getChains(live){
   const all=live&&currentStroke?[...strokes,currentStroke]:strokes;
-  if(!all.length) return null;
+  if(!all.length&&!warpPoints.length) return null;
   const radius=p('sl-radius'),smoothness=p('sl-smooth')/100,loose=p('sl-loose')/100,noiseAmt=p('sl-noise')/100;
   const step=Math.max(3,Math.floor(radius/7));
   const cols=Math.ceil(canvas.width/step)+2,rows=Math.ceil(canvas.height/step)+2;
   const allPts=[];
-  all.forEach(s=>resample(s,Math.max(2,radius*0.35)).forEach(pt=>allPts.push(pt)));
-  if(!allPts.length) return null;
+  if(all.length) all.forEach(s=>resample(s,Math.max(2,radius*0.35)).forEach(pt=>allPts.push(pt)));
   const grid=buildField(allPts,radius,cols,rows,step);
+  // compute thresh before warp injection so warp energy is calibrated correctly
   let maxVal=0;
   for(let i=0;i<grid.length;i++) if(grid[i]>maxVal) maxVal=grid[i];
+  // if only warp points and no strokes, use a synthetic maxVal
+  if(maxVal<0.01&&warpPoints.length) maxVal=1.0;
   if(maxVal<0.01) return null;
   const thresh=maxVal*(0.18+loose*0.37)*(0.5+(1-smoothness)*0.5);
-  const segs=march(grid,cols,rows,step,thresh,noiseAmt*4.5,0.18+noiseAmt*0.25,warpPoints);
+  // inject warp energy AFTER thresh is computed
+  if(warpPoints.length) applyWarpToField(grid,cols,rows,step,warpPoints,thresh);
+  const segs=march(grid,cols,rows,step,thresh,noiseAmt*4.5,0.18+noiseAmt*0.25);
   return chain(segs);
 }
 function scheduleRender(live){
@@ -536,12 +538,11 @@ function render(live){
     if(strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${so})`;ctx.lineWidth=sw;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
     ctx.restore();
   }
-  // always show warp indicators when points exist
   if(warpPoints.length){
     ctx.save();
     warpPoints.forEach(wp=>{
       ctx.beginPath();ctx.arc(wp.x,wp.y,wp.r,0,Math.PI*2);
-      ctx.strokeStyle=currentTool==='warp'?'rgba(255,100,50,0.6)':'rgba(255,100,50,0.25)';
+      ctx.strokeStyle=currentTool==='warp'?'rgba(255,100,50,0.55)':'rgba(255,100,50,0.2)';
       ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();
       ctx.beginPath();ctx.arc(wp.x,wp.y,5,0,Math.PI*2);
       ctx.fillStyle='rgba(255,100,50,0.7)';ctx.fill();ctx.setLineDash([]);
