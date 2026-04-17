@@ -13,12 +13,12 @@ body { background: #f5f5f0; color: #1a1a1a; font-family: 'Inter', system-ui, san
 .tool-btn { background: transparent; border: 1px solid transparent; color: #888; padding: 6px 14px; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.15s; }
 .tool-btn:hover { background: #f5f5f0; color: #333; }
 .tool-btn.active { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
-#panel { width: 264px; background: #fff; border-left: 1px solid #e8e8e2; padding: 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+#panel { width: 264px; background: #fff; border-left: 1px solid #e8e8e2; padding: 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .panel-section h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: #aaa; margin-bottom: 10px; font-weight: 600; }
-.param-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+.param-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
 .param-row label { font-size: 12px; color: #555; }
 .param-row span { font-size: 11px; color: #aaa; min-width: 28px; text-align: right; }
-input[type=range] { width: 100%; accent-color: #1a1a1a; margin-bottom: 8px; height: 2px; }
+input[type=range] { width: 100%; accent-color: #1a1a1a; margin-bottom: 7px; }
 .color-picker-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .color-picker-row label { font-size: 12px; color: #555; flex: 1; }
 input[type=color] { width: 32px; height: 24px; border: 1px solid #e0e0d8; border-radius: 5px; padding: 1px; cursor: pointer; background: none; }
@@ -39,6 +39,9 @@ input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
 .action-btn:hover { background: #f0f0eb; border-color: #ccc; color: #1a1a1a; }
 .action-btn.primary { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
 .action-btn.primary:hover { background: #333; }
+.upload-area { border: 1.5px dashed #ccc; border-radius: 8px; padding: 14px; text-align: center; cursor: pointer; font-size: 11px; color: #aaa; transition: all 0.15s; margin-bottom: 8px; }
+.upload-area:hover { border-color: #999; color: #666; background: #fafaf8; }
+#img-preview { width: 100%; border-radius: 6px; display: none; margin-bottom: 8px; }
 #status { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #aaa; pointer-events: none; }
 </style>
 </head>
@@ -49,7 +52,7 @@ input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
     <button class="tool-btn" id="btn-clear">Clear</button>
   </div>
   <canvas id="main-canvas"></canvas>
-  <div id="status">Draw strokes — they merge when close</div>
+  <div id="status">Draw strokes — hold to grow branches</div>
 </div>
 <div id="panel">
   <div class="panel-section">
@@ -58,10 +61,23 @@ input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
     <input type="range" id="sl-radius" min="10" max="80" value="36">
     <div class="param-row"><label>Smoothness</label><span id="val-smooth">60</span></div>
     <input type="range" id="sl-smooth" min="10" max="100" value="60">
+    <div class="param-row"><label>Loose</label><span id="val-loose">40</span></div>
+    <input type="range" id="sl-loose" min="0" max="100" value="40">
     <div class="param-row"><label>Noise</label><span id="val-noise">30</span></div>
-    <input type="range" id="sl-noise" min="0" max="80" value="30">
+    <input type="range" id="sl-noise" min="0" max="100" value="30">
     <div class="param-row"><label>Fill Opacity</label><span id="val-opacity">90</span></div>
     <input type="range" id="sl-opacity" min="0" max="100" value="90">
+  </div>
+  <div class="panel-section">
+    <h3>Branch</h3>
+    <div class="toggle-row">
+      <label>Enable (hold to grow)</label>
+      <label class="toggle"><input type="checkbox" id="ck-branch" checked><span class="toggle-slider"></span></label>
+    </div>
+    <div class="param-row"><label>Density</label><span id="val-bdensity">40</span></div>
+    <input type="range" id="sl-bdensity" min="5" max="100" value="40">
+    <div class="param-row"><label>Length</label><span id="val-blength">50</span></div>
+    <input type="range" id="sl-blength" min="10" max="100" value="50">
   </div>
   <div class="panel-section">
     <h3>Fill Color</h3>
@@ -96,6 +112,17 @@ input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
     </div>
   </div>
   <div class="panel-section">
+    <h3>Image to Blob</h3>
+    <div class="upload-area" id="upload-area">Click or drop image here</div>
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    <img id="img-preview">
+    <div class="param-row"><label>Edge Threshold</label><span id="val-ethresh">40</span></div>
+    <input type="range" id="sl-ethresh" min="5" max="120" value="40">
+    <div class="param-row"><label>Blur</label><span id="val-eblur">2</span></div>
+    <input type="range" id="sl-eblur" min="0" max="10" value="2">
+    <button class="action-btn" id="btn-apply-img">Apply to Canvas</button>
+  </div>
+  <div class="panel-section">
     <h3>Actions</h3>
     <button class="action-btn primary" id="btn-export-png">Export PNG</button>
     <button class="action-btn" id="btn-export-svg">Export SVG</button>
@@ -108,21 +135,27 @@ const area = document.getElementById('canvas-area');
 
 let strokes = [], currentStroke = null, isDrawing = false;
 let fillColor = '#ff6b9d', strokeColor = '#1a1a1a';
-let lastRender = 0, rafId = null;
+let rafId = null, lastRender = 0;
+let holdTimer = null, holdActive = false;
+let uploadedImage = null;
 
 function resize() { canvas.width = area.clientWidth; canvas.height = area.clientHeight; render(); }
 window.addEventListener('resize', resize);
 resize();
 
 function p(id) { return parseInt(document.getElementById(id).value); }
+function pf(id) { return parseFloat(document.getElementById(id).value); }
+
 function bindSlider(id, valId) {
   const sl = document.getElementById(id), vl = document.getElementById(valId);
   sl.addEventListener('input', () => { vl.textContent = sl.value; scheduleRender(); });
 }
-['radius','smooth','noise','opacity','swidth','sopacity'].forEach(n => bindSlider('sl-'+n,'val-'+n));
+['radius','smooth','loose','noise','opacity','swidth','sopacity','bdensity','blength','ethresh','eblur']
+  .forEach(n => bindSlider('sl-'+n, 'val-'+n));
 document.getElementById('ck-stroke').addEventListener('change', scheduleRender);
+document.getElementById('ck-branch').addEventListener('change', () => {});
 
-// fill swatches
+// swatches
 document.querySelectorAll('.swatch').forEach(sw => {
   sw.addEventListener('click', () => {
     document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
@@ -132,105 +165,253 @@ document.querySelectorAll('.swatch').forEach(sw => {
     scheduleRender();
   });
 });
-
 document.getElementById('fill-color').addEventListener('input', e => {
   document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-  fillColor = e.target.value;
-  scheduleRender();
+  fillColor = e.target.value; scheduleRender();
 });
+document.getElementById('stroke-color').addEventListener('input', e => { strokeColor = e.target.value; scheduleRender(); });
 
-document.getElementById('stroke-color').addEventListener('input', e => {
-  strokeColor = e.target.value;
-  scheduleRender();
-});
-
+// --- pointer events ---
 function getPos(e) {
   const r = canvas.getBoundingClientRect(), s = e.touches ? e.touches[0] : e;
   return { x: (s.clientX-r.left)*(canvas.width/r.width), y: (s.clientY-r.top)*(canvas.height/r.height) };
 }
 
-canvas.addEventListener('mousedown', e => { isDrawing = true; currentStroke = [getPos(e)]; });
+canvas.addEventListener('mousedown', e => {
+  isDrawing = true; holdActive = false;
+  currentStroke = [getPos(e)];
+  if (document.getElementById('ck-branch').checked) {
+    holdTimer = setTimeout(() => { holdActive = true; startBranching(); }, 400);
+  }
+});
 canvas.addEventListener('mousemove', e => {
   if (!isDrawing) return;
-  if (Date.now() - lastRender < 32) return;
   const pos = getPos(e), last = currentStroke[currentStroke.length-1];
-  if ((pos.x-last.x)**2+(pos.y-last.y)**2 > 9) { currentStroke.push(pos); scheduleRender(true); }
+  if ((pos.x-last.x)**2+(pos.y-last.y)**2 > 9) {
+    currentStroke.push(pos);
+    scheduleRender(true);
+  }
 });
 canvas.addEventListener('mouseup', finish);
 canvas.addEventListener('mouseleave', finish);
+
 function finish() {
+  if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+  holdActive = false;
   if (isDrawing && currentStroke?.length > 1) strokes.push(currentStroke);
   isDrawing = false; currentStroke = null; scheduleRender();
 }
 
-document.getElementById('btn-clear').addEventListener('click', () => { strokes = []; scheduleRender(); });
+// --- branch growth ---
+function startBranching() {
+  if (!isDrawing || !currentStroke || currentStroke.length < 2) return;
+  const density = p('sl-bdensity') / 100;
+  const lengthFactor = p('sl-blength') / 100;
+  const radius = p('sl-radius');
+  const src = currentStroke;
+  const numBranches = Math.max(1, Math.floor(src.length * density * 0.3));
+  for (let b = 0; b < numBranches; b++) {
+    const idx = Math.floor(Math.random() * (src.length - 1));
+    const pt = src[idx];
+    const dx = src[Math.min(idx+1, src.length-1)].x - src[Math.max(idx-1,0)].x;
+    const dy = src[Math.min(idx+1, src.length-1)].y - src[Math.max(idx-1,0)].y;
+    const len = Math.sqrt(dx*dx+dy*dy) || 1;
+    const nx = -dy/len, ny = dx/len; // perpendicular
+    const angle = (Math.random()-0.5) * Math.PI * 0.8;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const bx = nx*cos - ny*sin, by = nx*sin + ny*cos;
+    const branchLen = radius * (1.5 + Math.random() * 2) * lengthFactor;
+    const steps = Math.floor(branchLen / 4);
+    const branch = [pt];
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      branch.push({
+        x: pt.x + bx * branchLen * t + (Math.random()-0.5) * radius * 0.3,
+        y: pt.y + by * branchLen * t + (Math.random()-0.5) * radius * 0.3
+      });
+    }
+    strokes.push(branch);
+  }
+  scheduleRender();
+  if (holdActive && isDrawing) setTimeout(startBranching, 600);
+}
 
+document.getElementById('btn-clear').addEventListener('click', () => { strokes = []; scheduleRender(); });
 document.getElementById('btn-export-png').addEventListener('click', () => {
   const a = document.createElement('a'); a.download = 'blobit.png'; a.href = canvas.toDataURL(); a.click();
 });
-
 document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
 
-function scheduleRender(live) {
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = requestAnimationFrame(() => { rafId = null; render(live); });
+// --- image upload ---
+const uploadArea = document.getElementById('upload-area');
+const fileInput = document.getElementById('file-input');
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.style.borderColor='#666'; });
+uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor=''; });
+uploadArea.addEventListener('drop', e => { e.preventDefault(); uploadArea.style.borderColor=''; handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      uploadedImage = img;
+      const preview = document.getElementById('img-preview');
+      preview.src = ev.target.result; preview.style.display = 'block';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
-// --- noise ---
-function snoise(x, y, scale) {
-  const xi=Math.floor(x/scale), yi=Math.floor(y/scale), xf=x/scale-xi, yf=y/scale-yi;
-  const h=(a,b)=>((Math.sin(a*127.1+b*311.7)*43758.5453)%1+1)%1;
-  const lerp=(a,b,t)=>a+t*(b-a), fade=t=>t*t*(3-2*t);
-  return lerp(lerp(h(xi,yi),h(xi+1,yi),fade(xf)),lerp(h(xi,yi+1),h(xi+1,yi+1),fade(xf)),fade(yf))*2-1;
+document.getElementById('btn-apply-img').addEventListener('click', applyImageEdge);
+
+function applyImageEdge() {
+  if (!uploadedImage) return;
+  const thresh = p('sl-ethresh');
+  const blur = p('sl-eblur');
+  // draw image to offscreen canvas
+  const oc = document.createElement('canvas');
+  const scale = Math.min(canvas.width / uploadedImage.width, canvas.height / uploadedImage.height);
+  oc.width = Math.floor(uploadedImage.width * scale);
+  oc.height = Math.floor(uploadedImage.height * scale);
+  const oc2 = oc.getContext('2d');
+  oc2.drawImage(uploadedImage, 0, 0, oc.width, oc.height);
+  const imgData = oc2.getImageData(0, 0, oc.width, oc.height);
+  const edgePts = sobelEdge(imgData, thresh, blur);
+  // offset to center on canvas
+  const ox = (canvas.width - oc.width) / 2;
+  const oy = (canvas.height - oc.height) / 2;
+  // convert edge points to strokes (chain nearby points)
+  strokes = edgePointsToStrokes(edgePts, ox, oy, p('sl-radius') * 0.6);
+  scheduleRender();
+}
+// --- Sobel edge detection ---
+function sobelEdge(imgData, thresh, blurRadius) {
+  const w = imgData.width, h = imgData.height, d = imgData.data;
+  // grayscale
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) gray[i] = 0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2];
+  // box blur
+  const blurred = blurRadius > 0 ? boxBlur(gray, w, h, blurRadius) : gray;
+  // sobel
+  const pts = [];
+  for (let y = 1; y < h-1; y++) for (let x = 1; x < w-1; x++) {
+    const gx = -blurred[(y-1)*w+(x-1)] - 2*blurred[y*w+(x-1)] - blurred[(y+1)*w+(x-1)]
+               +blurred[(y-1)*w+(x+1)] + 2*blurred[y*w+(x+1)] + blurred[(y+1)*w+(x+1)];
+    const gy = -blurred[(y-1)*w+(x-1)] - 2*blurred[(y-1)*w+x] - blurred[(y-1)*w+(x+1)]
+               +blurred[(y+1)*w+(x-1)] + 2*blurred[(y+1)*w+x] + blurred[(y+1)*w+(x+1)];
+    if (Math.sqrt(gx*gx + gy*gy) > thresh) pts.push({x, y});
+  }
+  return pts;
+}
+
+function boxBlur(gray, w, h, r) {
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let sum = 0, cnt = 0;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      const nx = x+dx, ny = y+dy;
+      if (nx>=0&&nx<w&&ny>=0&&ny<h) { sum += gray[ny*w+nx]; cnt++; }
+    }
+    out[y*w+x] = sum/cnt;
+  }
+  return out;
+}
+
+function edgePointsToStrokes(pts, ox, oy, spacing) {
+  if (!pts.length) return [];
+  // subsample to avoid too many points
+  const step = Math.max(1, Math.floor(pts.length / 2000));
+  const sampled = pts.filter((_,i) => i % step === 0);
+  // simple greedy chaining by proximity
+  const used = new Uint8Array(sampled.length);
+  const chains = [];
+  const sp2 = spacing * spacing * 4;
+  for (let i = 0; i < sampled.length; i++) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const chain = [{x: sampled[i].x + ox, y: sampled[i].y + oy}];
+    let cur = i;
+    let found = true;
+    while (found) {
+      found = false;
+      let best = -1, bestD = sp2;
+      for (let j = 0; j < sampled.length; j++) {
+        if (used[j]) continue;
+        const dx = sampled[j].x - sampled[cur].x, dy = sampled[j].y - sampled[cur].y;
+        const d2 = dx*dx + dy*dy;
+        if (d2 < bestD) { bestD = d2; best = j; }
+      }
+      if (best >= 0) { used[best] = 1; chain.push({x: sampled[best].x + ox, y: sampled[best].y + oy}); cur = best; found = true; }
+    }
+    if (chain.length > 2) chains.push(chain);
+  }
+  return chains;
+}
+
+// --- noise (value noise) ---
+function snoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const h = (a, b) => (((Math.sin(a*127.1 + b*311.7) * 43758.5453) % 1) + 1) % 1;
+  const lerp = (a, b, t) => a + t*(b-a);
+  const fade = t => t*t*(3-2*t);
+  return lerp(lerp(h(xi,yi), h(xi+1,yi), fade(xf)), lerp(h(xi,yi+1), h(xi+1,yi+1), fade(xf)), fade(yf)) * 2 - 1;
+}
+
+// fBm: 3 octaves
+function fbm(x, y) {
+  return snoise(x, y) * 0.6 + snoise(x*2.1, y*2.1) * 0.3 + snoise(x*4.3, y*4.3) * 0.1;
 }
 
 // resample
 function resample(pts, spacing) {
   if (pts.length < 2) return pts;
-  const out=[pts[0]]; let carry=0;
-  for (let i=1;i<pts.length;i++) {
-    const dx=pts[i].x-pts[i-1].x,dy=pts[i].y-pts[i-1].y,seg=Math.sqrt(dx*dx+dy*dy);
-    let d=carry;
-    while(d<seg){const t=d/seg;out.push({x:pts[i-1].x+dx*t,y:pts[i-1].y+dy*t});d+=spacing;}
-    carry=d-seg;
+  const out = [pts[0]]; let carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x-pts[i-1].x, dy = pts[i].y-pts[i-1].y, seg = Math.sqrt(dx*dx+dy*dy);
+    let d = carry;
+    while (d < seg) { const t = d/seg; out.push({x: pts[i-1].x+dx*t, y: pts[i-1].y+dy*t}); d += spacing; }
+    carry = d - seg;
   }
   return out;
 }
 
-// build metaball field — noise applied to sample coordinates for organic edge deformation
+// build metaball field
 function buildField(pts, r, noiseAmt, cols, rows, step) {
   const cutoff2 = 4*r*r;
   const grid = new Float32Array(cols*rows);
-  const noiseScale = r * 1.8; // spatial frequency of noise (in pixels)
-  const noiseDisp = noiseAmt * r * 0.28; // keep small to avoid isoline folding
+  const noiseFreq = 1.0 / (r * 1.2); // spatial frequency
+  const noiseDisp = noiseAmt * r * 0.45;
 
   for (let i = 0; i < pts.length; i++) {
     const px = pts[i].x, py = pts[i].y;
-    const c0 = Math.max(0, Math.floor((px - 2*r) / step));
-    const c1 = Math.min(cols-1, Math.ceil((px + 2*r) / step));
-    const r0 = Math.max(0, Math.floor((py - 2*r) / step));
-    const r1 = Math.min(rows-1, Math.ceil((py + 2*r) / step));
+    const c0 = Math.max(0, Math.floor((px-2*r)/step));
+    const c1 = Math.min(cols-1, Math.ceil((px+2*r)/step));
+    const r0 = Math.max(0, Math.floor((py-2*r)/step));
+    const r1 = Math.min(rows-1, Math.ceil((py+2*r)/step));
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
-        let sx = col * step, sy = row * step;
+        let sx = col*step, sy = row*step;
         if (noiseDisp > 0) {
-          const nx = col / (noiseScale / step), ny = row / (noiseScale / step);
-          sx += snoise(nx, ny, 1.0) * noiseDisp;
-          sy += snoise(nx + 31.41, ny + 27.18, 1.0) * noiseDisp;
+          sx += fbm(sx*noiseFreq, sy*noiseFreq) * noiseDisp;
+          sy += fbm(sx*noiseFreq + 31.41, sy*noiseFreq + 27.18) * noiseDisp;
         }
-        const dx = sx - px, dy = sy - py, d2 = dx*dx + dy*dy;
+        const dx = sx-px, dy = sy-py, d2 = dx*dx+dy*dy;
         if (d2 < cutoff2) grid[row*cols+col] += (1 - d2/cutoff2)**2;
       }
     }
   }
   return grid;
 }
-
 // marching squares
 function march(grid, cols, rows, step, thresh) {
-  const segs=[];
+  const segs = [];
   function interp(ax,ay,bx,by,va,vb){const t=(thresh-va)/(vb-va);return{x:ax+(bx-ax)*t,y:ay+(by-ay)*t};}
-  for (let r=0;r<rows-1;r++) for (let c=0;c<cols-1;c++) {
+  for (let r = 0; r < rows-1; r++) for (let c = 0; c < cols-1; c++) {
     const x=c*step,y=r*step,x1=x+step,y1=y+step;
     const v00=grid[r*cols+c],v10=grid[r*cols+c+1],v01=grid[(r+1)*cols+c],v11=grid[(r+1)*cols+c+1];
     const idx=(v00>thresh?8:0)|(v10>thresh?4:0)|(v11>thresh?2:0)|(v01>thresh?1:0);
@@ -238,7 +419,7 @@ function march(grid, cols, rows, step, thresh) {
     const T=interp(x,y,x1,y,v00,v10),R=interp(x1,y,x1,y1,v10,v11);
     const B=interp(x,y1,x1,y1,v01,v11),L=interp(x,y,x,y1,v00,v01);
     const tbl={1:[[B,L]],2:[[R,B]],3:[[R,L]],4:[[T,R]],5:[[T,L],[R,B]],6:[[T,B]],
-               7:[[T,L]],8:[[T,L]],9:[[T,B]],10:[[T,R],[B,L]],11:[[T,R]],12:[[R,L]],13:[[R,B]],14:[[B,L]]};
+               7:[[T,L]],8:[[L,T]],9:[[T,B]],10:[[T,R],[B,L]],11:[[R,T]],12:[[R,L]],13:[[B,R]],14:[[L,B]]};
     (tbl[idx]||[]).forEach(([a,b])=>segs.push([a,b]));
   }
   return segs;
@@ -246,7 +427,7 @@ function march(grid, cols, rows, step, thresh) {
 
 // chain segments into polylines
 function chain(segs) {
-  const eps2=4,used=new Uint8Array(segs.length),chains=[];
+  const eps2=4, used=new Uint8Array(segs.length), chains=[];
   for (let i=0;i<segs.length;i++) {
     if(used[i]) continue; used[i]=1;
     const c=[segs[i][0],segs[i][1]]; let changed=true;
@@ -263,12 +444,12 @@ function chain(segs) {
   return chains;
 }
 
-// smooth bezier
+// smooth bezier path onto ctx
 function smoothPath(pts) {
   if(pts.length<2) return;
   ctx.moveTo(pts[0].x,pts[0].y);
   for(let i=0;i<pts.length-1;i++){
-    const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;
+    const mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
     if(i===0) ctx.lineTo(mx,my);
     else ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
   }
@@ -280,72 +461,78 @@ function hexToRgb(hex){return{r:parseInt(hex.slice(1,3),16),g:parseInt(hex.slice
 function getChains(live) {
   const all = live && currentStroke ? [...strokes, currentStroke] : strokes;
   if (!all.length) return null;
-  const radius=p('sl-radius'), noiseAmt=p('sl-noise')/100;
-  const smoothness=p('sl-smooth')/100;
-  const thresh=0.12+(1-smoothness)*0.28;
-  const step=Math.max(3,Math.floor(radius/6));
-  const spacing=Math.max(2,radius*0.35);
-  const cols=Math.ceil(canvas.width/step)+2, rows=Math.ceil(canvas.height/step)+2;
-  const allPts=[];
-  all.forEach(s=>resample(s,spacing).forEach(pt=>allPts.push(pt)));
-  if(!allPts.length) return null;
-  const grid=buildField(allPts,radius,noiseAmt,cols,rows,step);
-  const segs=march(grid,cols,rows,step,thresh);
+  const radius = p('sl-radius');
+  const noiseAmt = p('sl-noise') / 100;
+  const smoothness = p('sl-smooth') / 100;
+  const loose = p('sl-loose') / 100;
+  // threshold: smoothness tightens, loose loosens
+  const baseThresh = 0.08 + (1 - smoothness) * 0.22;
+  const thresh = baseThresh + loose * 0.25;
+  const step = Math.max(3, Math.floor(radius / 7));
+  const spacing = Math.max(2, radius * 0.35);
+  const cols = Math.ceil(canvas.width/step)+2, rows = Math.ceil(canvas.height/step)+2;
+  const allPts = [];
+  all.forEach(s => resample(s, spacing).forEach(pt => allPts.push(pt)));
+  if (!allPts.length) return null;
+  const grid = buildField(allPts, radius, noiseAmt, cols, rows, step);
+  const segs = march(grid, cols, rows, step, thresh);
   return chain(segs);
 }
 
+function scheduleRender(live) {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(() => { rafId = null; render(live); });
+}
+
 function render(live) {
-  lastRender=Date.now();
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  const chains=getChains(live);
-  if(!chains||!chains.length) return;
-
-  const fillOpacity=p('sl-opacity')/100;
-  const strokeOn=document.getElementById('ck-stroke').checked;
-  const strokeWidth=p('sl-swidth');
-  const strokeOpacity=p('sl-sopacity')/100;
-  const {r,g,b}=hexToRgb(fillColor);
-  const {r:sr,g:sg,b:sb}=hexToRgb(strokeColor);
-
+  lastRender = Date.now();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const chains = getChains(live);
+  if (!chains || !chains.length) return;
+  const fillOpacity = p('sl-opacity') / 100;
+  const strokeOn = document.getElementById('ck-stroke').checked;
+  const strokeWidth = p('sl-swidth');
+  const strokeOpacity = p('sl-sopacity') / 100;
+  const {r,g,b} = hexToRgb(fillColor);
+  const {r:sr,g:sg,b:sb} = hexToRgb(strokeColor);
   ctx.save();
   ctx.beginPath();
-  chains.forEach(c=>{smoothPath(c);ctx.closePath();});
-  if(fillOpacity>0){ctx.fillStyle=`rgba(${r},${g},${b},${fillOpacity})`;ctx.fill('evenodd');}
-  if(strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${strokeOpacity})`;ctx.lineWidth=strokeWidth;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
+  chains.forEach(c => { smoothPath(c); ctx.closePath(); });
+  if (fillOpacity > 0) { ctx.fillStyle=`rgba(${r},${g},${b},${fillOpacity})`; ctx.fill('evenodd'); }
+  if (strokeOn) {
+    ctx.strokeStyle=`rgba(${sr},${sg},${sb},${strokeOpacity})`;
+    ctx.lineWidth=strokeWidth; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+  }
   ctx.restore();
 }
 
 function exportSVG() {
-  const chains=getChains(false);
-  if(!chains||!chains.length) return;
-  const fillOpacity=p('sl-opacity')/100;
-  const strokeOn=document.getElementById('ck-stroke').checked;
-  const strokeWidth=p('sl-swidth');
-  const strokeOpacity=p('sl-sopacity')/100;
-
-  // build smooth path d string
+  const chains = getChains(false);
+  if (!chains || !chains.length) return;
+  const fillOpacity = p('sl-opacity') / 100;
+  const strokeOn = document.getElementById('ck-stroke').checked;
+  const strokeWidth = p('sl-swidth');
+  const strokeOpacity = p('sl-sopacity') / 100;
   function pathD(pts) {
-    if(pts.length<2) return '';
-    let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-    for(let i=0;i<pts.length-1;i++){
-      const mx=((pts[i].x+pts[i+1].x)/2).toFixed(1),my=((pts[i].y+pts[i+1].y)/2).toFixed(1);
-      if(i===0) d+=` L${mx},${my}`;
-      else d+=` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mx},${my}`;
+    if (pts.length < 2) return '';
+    let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+    for (let i = 0; i < pts.length-1; i++) {
+      const mx = ((pts[i].x+pts[i+1].x)/2).toFixed(1), my = ((pts[i].y+pts[i+1].y)/2).toFixed(1);
+      if (i===0) d += ` L${mx},${my}`;
+      else d += ` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mx},${my}`;
     }
-    d+=` L${pts[pts.length-1].x.toFixed(1)},${pts[pts.length-1].y.toFixed(1)} Z`;
+    d += ` L${pts[pts.length-1].x.toFixed(1)},${pts[pts.length-1].y.toFixed(1)} Z`;
     return d;
   }
-
-  const d=chains.map(c=>pathD(c)).join(' ');
-  const fill=fillOpacity>0?fillColor:'none';
-  const stroke=strokeOn?strokeColor:'none';
-  const sw=strokeOn?strokeWidth:0;
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">
+  const d = chains.map(c => pathD(c)).join(' ');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">
 <rect width="100%" height="100%" fill="#f5f5f0"/>
-<path d="${d}" fill="${fill}" fill-opacity="${fillOpacity}" fill-rule="evenodd" stroke="${stroke}" stroke-width="${sw}" stroke-opacity="${strokeOpacity}" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="${d}" fill="${fillOpacity>0?fillColor:'none'}" fill-opacity="${fillOpacity}" fill-rule="evenodd"
+  stroke="${strokeOn?strokeColor:'none'}" stroke-width="${strokeOn?strokeWidth:0}"
+  stroke-opacity="${strokeOpacity}" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>`;
-  const blob=new Blob([svg],{type:'image/svg+xml'});
-  const a=document.createElement('a'); a.download='blobit.svg'; a.href=URL.createObjectURL(blob); a.click();
+  const blob = new Blob([svg], {type:'image/svg+xml'});
+  const a = document.createElement('a'); a.download='blobit.svg'; a.href=URL.createObjectURL(blob); a.click();
 }
 </script>
 </body>
