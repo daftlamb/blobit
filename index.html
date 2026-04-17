@@ -778,6 +778,18 @@ function applyImageEdge(){
   const oc2=oc.getContext('2d');oc2.drawImage(uploadedImage,0,0,oc.width,oc.height);
   const id=oc2.getImageData(0,0,oc.width,oc.height);
   const edgeMap=detectEdges(id,p('esens'),p('edetail'),p('eblur'));
+
+  // debug: show raw edge map as preview image
+  const dbg=document.createElement('canvas');dbg.width=oc.width;dbg.height=oc.height;
+  const dbg2=dbg.getContext('2d');const dbgId=dbg2.createImageData(oc.width,oc.height);
+  for(let i=0;i<oc.width*oc.height;i++){
+    const v=edgeMap[i]?255:0;
+    dbgId.data[i*4]=v;dbgId.data[i*4+1]=v;dbgId.data[i*4+2]=v;dbgId.data[i*4+3]=255;
+  }
+  dbg2.putImageData(dbgId,0,0);
+  const pv=document.getElementById('img-preview');
+  if(pv){pv.src=dbg.toDataURL();pv.style.display='block';}
+
   const chains=traceChains(edgeMap,oc.width,oc.height,p('emin'));
   const ox=(ab.w-oc.width)/2,oy=(ab.h-oc.height)/2;
   ab.strokes=chains.map(c=>c.map(pt=>({x:pt.x+ox,y:pt.y+oy})));
