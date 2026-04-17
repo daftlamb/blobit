@@ -135,8 +135,7 @@ const area = document.getElementById('canvas-area');
 
 let strokes = [], currentStroke = null, isDrawing = false;
 let fillColor = '#ff6b9d', strokeColor = '#1a1a1a';
-let rafId = null, lastRender = 0;
-let holdTimer = null, holdActive = false;
+let rafId = null, holdTimer = null, holdActive = false;
 let uploadedImage = null;
 
 function resize() { canvas.width = area.clientWidth; canvas.height = area.clientHeight; render(); }
@@ -144,7 +143,6 @@ window.addEventListener('resize', resize);
 resize();
 
 function p(id) { return parseInt(document.getElementById(id).value); }
-function pf(id) { return parseFloat(document.getElementById(id).value); }
 
 function bindSlider(id, valId) {
   const sl = document.getElementById(id), vl = document.getElementById(valId);
@@ -153,9 +151,7 @@ function bindSlider(id, valId) {
 ['radius','smooth','loose','noise','opacity','swidth','sopacity','bdensity','blength','ethresh','eblur']
   .forEach(n => bindSlider('sl-'+n, 'val-'+n));
 document.getElementById('ck-stroke').addEventListener('change', scheduleRender);
-document.getElementById('ck-branch').addEventListener('change', () => {});
 
-// swatches
 document.querySelectorAll('.swatch').forEach(sw => {
   sw.addEventListener('click', () => {
     document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
@@ -171,7 +167,6 @@ document.getElementById('fill-color').addEventListener('input', e => {
 });
 document.getElementById('stroke-color').addEventListener('input', e => { strokeColor = e.target.value; scheduleRender(); });
 
-// --- pointer events ---
 function getPos(e) {
   const r = canvas.getBoundingClientRect(), s = e.touches ? e.touches[0] : e;
   return { x: (s.clientX-r.left)*(canvas.width/r.width), y: (s.clientY-r.top)*(canvas.height/r.height) };
@@ -181,15 +176,14 @@ canvas.addEventListener('mousedown', e => {
   isDrawing = true; holdActive = false;
   currentStroke = [getPos(e)];
   if (document.getElementById('ck-branch').checked) {
-    holdTimer = setTimeout(() => { holdActive = true; startBranching(); }, 400);
+    holdTimer = setTimeout(() => { holdActive = true; growBranches(); }, 500);
   }
 });
 canvas.addEventListener('mousemove', e => {
   if (!isDrawing) return;
   const pos = getPos(e), last = currentStroke[currentStroke.length-1];
   if ((pos.x-last.x)**2+(pos.y-last.y)**2 > 9) {
-    currentStroke.push(pos);
-    scheduleRender(true);
+    currentStroke.push(pos); scheduleRender(true);
   }
 });
 canvas.addEventListener('mouseup', finish);
@@ -202,38 +196,38 @@ function finish() {
   isDrawing = false; currentStroke = null; scheduleRender();
 }
 
-// --- branch growth ---
-function startBranching() {
+function growBranches() {
   if (!isDrawing || !currentStroke || currentStroke.length < 2) return;
+  const radius = p('sl-radius');
   const density = p('sl-bdensity') / 100;
   const lengthFactor = p('sl-blength') / 100;
-  const radius = p('sl-radius');
   const src = currentStroke;
-  const numBranches = Math.max(1, Math.floor(src.length * density * 0.3));
-  for (let b = 0; b < numBranches; b++) {
+  const num = Math.max(1, Math.floor(src.length * density * 0.25));
+  for (let b = 0; b < num; b++) {
     const idx = Math.floor(Math.random() * (src.length - 1));
     const pt = src[idx];
-    const dx = src[Math.min(idx+1, src.length-1)].x - src[Math.max(idx-1,0)].x;
-    const dy = src[Math.min(idx+1, src.length-1)].y - src[Math.max(idx-1,0)].y;
+    const nx = src[Math.min(idx+1, src.length-1)];
+    const px = src[Math.max(idx-1, 0)];
+    const dx = nx.x - px.x, dy = nx.y - px.y;
     const len = Math.sqrt(dx*dx+dy*dy) || 1;
-    const nx = -dy/len, ny = dx/len; // perpendicular
-    const angle = (Math.random()-0.5) * Math.PI * 0.8;
+    const perpX = -dy/len, perpY = dx/len;
+    const angle = (Math.random()-0.5) * Math.PI * 0.9;
     const cos = Math.cos(angle), sin = Math.sin(angle);
-    const bx = nx*cos - ny*sin, by = nx*sin + ny*cos;
-    const branchLen = radius * (1.5 + Math.random() * 2) * lengthFactor;
-    const steps = Math.floor(branchLen / 4);
+    const bx = perpX*cos - perpY*sin, by = perpX*sin + perpY*cos;
+    const branchLen = radius * (1.5 + Math.random() * 2.5) * lengthFactor;
+    const steps = Math.max(3, Math.floor(branchLen / 5));
     const branch = [pt];
     for (let s = 1; s <= steps; s++) {
       const t = s / steps;
       branch.push({
-        x: pt.x + bx * branchLen * t + (Math.random()-0.5) * radius * 0.3,
-        y: pt.y + by * branchLen * t + (Math.random()-0.5) * radius * 0.3
+        x: pt.x + bx * branchLen * t + (Math.random()-0.5) * radius * 0.25,
+        y: pt.y + by * branchLen * t + (Math.random()-0.5) * radius * 0.25
       });
     }
     strokes.push(branch);
   }
   scheduleRender();
-  if (holdActive && isDrawing) setTimeout(startBranching, 600);
+  if (holdActive && isDrawing) setTimeout(growBranches, 700);
 }
 
 document.getElementById('btn-clear').addEventListener('click', () => { strokes = []; scheduleRender(); });
@@ -242,7 +236,7 @@ document.getElementById('btn-export-png').addEventListener('click', () => {
 });
 document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
 
-// --- image upload ---
+// image upload
 const uploadArea = document.getElementById('upload-area');
 const fileInput = document.getElementById('file-input');
 uploadArea.addEventListener('click', () => fileInput.click());
@@ -271,8 +265,7 @@ document.getElementById('btn-apply-img').addEventListener('click', applyImageEdg
 function applyImageEdge() {
   if (!uploadedImage) return;
   const thresh = p('sl-ethresh');
-  const blur = p('sl-eblur');
-  // draw image to offscreen canvas
+  const blurR = p('sl-eblur');
   const oc = document.createElement('canvas');
   const scale = Math.min(canvas.width / uploadedImage.width, canvas.height / uploadedImage.height);
   oc.width = Math.floor(uploadedImage.width * scale);
@@ -280,30 +273,25 @@ function applyImageEdge() {
   const oc2 = oc.getContext('2d');
   oc2.drawImage(uploadedImage, 0, 0, oc.width, oc.height);
   const imgData = oc2.getImageData(0, 0, oc.width, oc.height);
-  const edgePts = sobelEdge(imgData, thresh, blur);
-  // offset to center on canvas
+  const edgePts = sobelEdge(imgData, thresh, blurR);
   const ox = (canvas.width - oc.width) / 2;
   const oy = (canvas.height - oc.height) / 2;
-  // convert edge points to strokes (chain nearby points)
-  strokes = edgePointsToStrokes(edgePts, ox, oy, p('sl-radius') * 0.6);
+  strokes = edgePointsToStrokes(edgePts, ox, oy, p('sl-radius') * 0.5);
   scheduleRender();
 }
-// --- Sobel edge detection ---
+
 function sobelEdge(imgData, thresh, blurRadius) {
   const w = imgData.width, h = imgData.height, d = imgData.data;
-  // grayscale
   const gray = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) gray[i] = 0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2];
-  // box blur
   const blurred = blurRadius > 0 ? boxBlur(gray, w, h, blurRadius) : gray;
-  // sobel
   const pts = [];
   for (let y = 1; y < h-1; y++) for (let x = 1; x < w-1; x++) {
     const gx = -blurred[(y-1)*w+(x-1)] - 2*blurred[y*w+(x-1)] - blurred[(y+1)*w+(x-1)]
                +blurred[(y-1)*w+(x+1)] + 2*blurred[y*w+(x+1)] + blurred[(y+1)*w+(x+1)];
     const gy = -blurred[(y-1)*w+(x-1)] - 2*blurred[(y-1)*w+x] - blurred[(y-1)*w+(x+1)]
                +blurred[(y+1)*w+(x-1)] + 2*blurred[(y+1)*w+x] + blurred[(y+1)*w+(x+1)];
-    if (Math.sqrt(gx*gx + gy*gy) > thresh) pts.push({x, y});
+    if (Math.sqrt(gx*gx+gy*gy) > thresh) pts.push({x, y});
   }
   return pts;
 }
@@ -323,97 +311,90 @@ function boxBlur(gray, w, h, r) {
 
 function edgePointsToStrokes(pts, ox, oy, spacing) {
   if (!pts.length) return [];
-  // subsample to avoid too many points
-  const step = Math.max(1, Math.floor(pts.length / 2000));
+  const step = Math.max(1, Math.floor(pts.length / 1500));
   const sampled = pts.filter((_,i) => i % step === 0);
-  // simple greedy chaining by proximity
   const used = new Uint8Array(sampled.length);
   const chains = [];
-  const sp2 = spacing * spacing * 4;
+  const sp2 = spacing * spacing * 9;
   for (let i = 0; i < sampled.length; i++) {
-    if (used[i]) continue;
-    used[i] = 1;
-    const chain = [{x: sampled[i].x + ox, y: sampled[i].y + oy}];
-    let cur = i;
-    let found = true;
+    if (used[i]) continue; used[i] = 1;
+    const chain = [{x: sampled[i].x+ox, y: sampled[i].y+oy}];
+    let cur = i, found = true;
     while (found) {
-      found = false;
-      let best = -1, bestD = sp2;
+      found = false; let best = -1, bestD = sp2;
       for (let j = 0; j < sampled.length; j++) {
         if (used[j]) continue;
-        const dx = sampled[j].x - sampled[cur].x, dy = sampled[j].y - sampled[cur].y;
-        const d2 = dx*dx + dy*dy;
+        const dx = sampled[j].x-sampled[cur].x, dy = sampled[j].y-sampled[cur].y;
+        const d2 = dx*dx+dy*dy;
         if (d2 < bestD) { bestD = d2; best = j; }
       }
-      if (best >= 0) { used[best] = 1; chain.push({x: sampled[best].x + ox, y: sampled[best].y + oy}); cur = best; found = true; }
+      if (best >= 0) { used[best]=1; chain.push({x:sampled[best].x+ox,y:sampled[best].y+oy}); cur=best; found=true; }
     }
     if (chain.length > 2) chains.push(chain);
   }
   return chains;
 }
 
-// --- noise (value noise) ---
+// --- value noise (single layer, fast) ---
 function snoise(x, y) {
-  const xi = Math.floor(x), yi = Math.floor(y);
-  const xf = x - xi, yf = y - yi;
-  const h = (a, b) => (((Math.sin(a*127.1 + b*311.7) * 43758.5453) % 1) + 1) % 1;
-  const lerp = (a, b, t) => a + t*(b-a);
-  const fade = t => t*t*(3-2*t);
-  return lerp(lerp(h(xi,yi), h(xi+1,yi), fade(xf)), lerp(h(xi,yi+1), h(xi+1,yi+1), fade(xf)), fade(yf)) * 2 - 1;
+  const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  const h=(a,b)=>((Math.sin(a*127.1+b*311.7)*43758.5453)%1+1)%1;
+  const lerp=(a,b,t)=>a+t*(b-a), fade=t=>t*t*(3-2*t);
+  return lerp(lerp(h(xi,yi),h(xi+1,yi),fade(xf)),lerp(h(xi,yi+1),h(xi+1,yi+1),fade(xf)),fade(yf))*2-1;
 }
 
-// fBm: 3 octaves
-function fbm(x, y) {
-  return snoise(x, y) * 0.6 + snoise(x*2.1, y*2.1) * 0.3 + snoise(x*4.3, y*4.3) * 0.1;
-}
-
-// resample
 function resample(pts, spacing) {
   if (pts.length < 2) return pts;
-  const out = [pts[0]]; let carry = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const dx = pts[i].x-pts[i-1].x, dy = pts[i].y-pts[i-1].y, seg = Math.sqrt(dx*dx+dy*dy);
-    let d = carry;
-    while (d < seg) { const t = d/seg; out.push({x: pts[i-1].x+dx*t, y: pts[i-1].y+dy*t}); d += spacing; }
-    carry = d - seg;
+  const out=[pts[0]]; let carry=0;
+  for (let i=1;i<pts.length;i++) {
+    const dx=pts[i].x-pts[i-1].x, dy=pts[i].y-pts[i-1].y, seg=Math.sqrt(dx*dx+dy*dy);
+    let d=carry;
+    while(d<seg){const t=d/seg;out.push({x:pts[i-1].x+dx*t,y:pts[i-1].y+dy*t});d+=spacing;}
+    carry=d-seg;
   }
   return out;
 }
 
-// build metaball field
-function buildField(pts, r, noiseAmt, cols, rows, step) {
-  const cutoff2 = 4*r*r;
-  const grid = new Float32Array(cols*rows);
-  const noiseFreq = 1.0 / (r * 1.2); // spatial frequency
-  const noiseDisp = noiseAmt * r * 0.45;
-
-  for (let i = 0; i < pts.length; i++) {
-    const px = pts[i].x, py = pts[i].y;
-    const c0 = Math.max(0, Math.floor((px-2*r)/step));
-    const c1 = Math.min(cols-1, Math.ceil((px+2*r)/step));
-    const r0 = Math.max(0, Math.floor((py-2*r)/step));
-    const r1 = Math.min(rows-1, Math.ceil((py+2*r)/step));
-    for (let row = r0; row <= r1; row++) {
-      for (let col = c0; col <= c1; col++) {
-        let sx = col*step, sy = row*step;
-        if (noiseDisp > 0) {
-          sx += fbm(sx*noiseFreq, sy*noiseFreq) * noiseDisp;
-          sy += fbm(sx*noiseFreq + 31.41, sy*noiseFreq + 27.18) * noiseDisp;
-        }
-        const dx = sx-px, dy = sy-py, d2 = dx*dx+dy*dy;
-        if (d2 < cutoff2) grid[row*cols+col] += (1 - d2/cutoff2)**2;
-      }
+// build field — adaptive threshold based on actual max value
+function buildField(pts, r, cols, rows, step) {
+  const cutoff2=4*r*r;
+  const grid=new Float32Array(cols*rows);
+  for (let i=0;i<pts.length;i++) {
+    const px=pts[i].x, py=pts[i].y;
+    const c0=Math.max(0,Math.floor((px-2*r)/step));
+    const c1=Math.min(cols-1,Math.ceil((px+2*r)/step));
+    const r0=Math.max(0,Math.floor((py-2*r)/step));
+    const r1=Math.min(rows-1,Math.ceil((py+2*r)/step));
+    for (let row=r0;row<=r1;row++) for (let col=c0;col<=c1;col++) {
+      const dx=col*step-px, dy=row*step-py, d2=dx*dx+dy*dy;
+      if (d2<cutoff2) grid[row*cols+col]+=(1-d2/cutoff2)**2;
     }
   }
   return grid;
 }
-// marching squares
-function march(grid, cols, rows, step, thresh) {
-  const segs = [];
+
+// apply noise as post-process warp on grid lookup
+function warpedSample(grid, cols, rows, col, row, noiseDisp, noiseFreq) {
+  if (noiseDisp <= 0) return grid[row*cols+col];
+  const wc = col + snoise(col*noiseFreq, row*noiseFreq) * noiseDisp;
+  const wr = row + snoise(col*noiseFreq+31.41, row*noiseFreq+27.18) * noiseDisp;
+  // bilinear interpolation
+  const c0=Math.floor(wc), r0=Math.floor(wr);
+  const c1=Math.min(cols-1,c0+1), r1=Math.min(rows-1,r0+1);
+  const fc=wc-c0, fr=wr-r0;
+  const cc0=Math.max(0,Math.min(cols-1,c0)), cc1=Math.max(0,Math.min(cols-1,c1));
+  const rr0=Math.max(0,Math.min(rows-1,r0)), rr1=Math.max(0,Math.min(rows-1,r1));
+  return (grid[rr0*cols+cc0]*(1-fc)+grid[rr0*cols+cc1]*fc)*(1-fr)
+        +(grid[rr1*cols+cc0]*(1-fc)+grid[rr1*cols+cc1]*fc)*fr;
+}
+
+function march(grid, cols, rows, step, thresh, noiseDisp, noiseFreq) {
+  const segs=[];
+  function sample(col,row){ return warpedSample(grid,cols,rows,col,row,noiseDisp,noiseFreq); }
   function interp(ax,ay,bx,by,va,vb){const t=(thresh-va)/(vb-va);return{x:ax+(bx-ax)*t,y:ay+(by-ay)*t};}
-  for (let r = 0; r < rows-1; r++) for (let c = 0; c < cols-1; c++) {
+  for (let r=0;r<rows-1;r++) for (let c=0;c<cols-1;c++) {
     const x=c*step,y=r*step,x1=x+step,y1=y+step;
-    const v00=grid[r*cols+c],v10=grid[r*cols+c+1],v01=grid[(r+1)*cols+c],v11=grid[(r+1)*cols+c+1];
+    const v00=sample(c,r),v10=sample(c+1,r),v01=sample(c,r+1),v11=sample(c+1,r+1);
     const idx=(v00>thresh?8:0)|(v10>thresh?4:0)|(v11>thresh?2:0)|(v01>thresh?1:0);
     if(idx===0||idx===15) continue;
     const T=interp(x,y,x1,y,v00,v10),R=interp(x1,y,x1,y1,v10,v11);
@@ -425,9 +406,8 @@ function march(grid, cols, rows, step, thresh) {
   return segs;
 }
 
-// chain segments into polylines
 function chain(segs) {
-  const eps2=4, used=new Uint8Array(segs.length), chains=[];
+  const eps2=4,used=new Uint8Array(segs.length),chains=[];
   for (let i=0;i<segs.length;i++) {
     if(used[i]) continue; used[i]=1;
     const c=[segs[i][0],segs[i][1]]; let changed=true;
@@ -444,12 +424,11 @@ function chain(segs) {
   return chains;
 }
 
-// smooth bezier path onto ctx
 function smoothPath(pts) {
   if(pts.length<2) return;
   ctx.moveTo(pts[0].x,pts[0].y);
   for(let i=0;i<pts.length-1;i++){
-    const mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
+    const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;
     if(i===0) ctx.lineTo(mx,my);
     else ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
   }
@@ -462,20 +441,28 @@ function getChains(live) {
   const all = live && currentStroke ? [...strokes, currentStroke] : strokes;
   if (!all.length) return null;
   const radius = p('sl-radius');
-  const noiseAmt = p('sl-noise') / 100;
   const smoothness = p('sl-smooth') / 100;
   const loose = p('sl-loose') / 100;
-  // threshold: smoothness tightens, loose loosens
-  const baseThresh = 0.08 + (1 - smoothness) * 0.22;
-  const thresh = baseThresh + loose * 0.25;
+  const noiseAmt = p('sl-noise') / 100;
   const step = Math.max(3, Math.floor(radius / 7));
   const spacing = Math.max(2, radius * 0.35);
   const cols = Math.ceil(canvas.width/step)+2, rows = Math.ceil(canvas.height/step)+2;
   const allPts = [];
   all.forEach(s => resample(s, spacing).forEach(pt => allPts.push(pt)));
   if (!allPts.length) return null;
-  const grid = buildField(allPts, radius, noiseAmt, cols, rows, step);
-  const segs = march(grid, cols, rows, step, thresh);
+
+  const grid = buildField(allPts, radius, cols, rows, step);
+
+  // adaptive threshold: find max field value, set threshold relative to it
+  let maxVal = 0;
+  for (let i = 0; i < grid.length; i++) if (grid[i] > maxVal) maxVal = grid[i];
+  if (maxVal < 0.01) return null;
+  // base: 18% of max (tight), loose pushes up to 55% (separates blobs)
+  const thresh = maxVal * (0.18 + loose * 0.37) * (0.5 + (1-smoothness) * 0.5);
+
+  const noiseDisp = noiseAmt * 4.5; // in grid cells
+  const noiseFreq = 0.18 + noiseAmt * 0.25;
+  const segs = march(grid, cols, rows, step, thresh, noiseDisp, noiseFreq);
   return chain(segs);
 }
 
@@ -485,54 +472,50 @@ function scheduleRender(live) {
 }
 
 function render(live) {
-  lastRender = Date.now();
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
   const chains = getChains(live);
   if (!chains || !chains.length) return;
-  const fillOpacity = p('sl-opacity') / 100;
+  const fillOpacity = p('sl-opacity')/100;
   const strokeOn = document.getElementById('ck-stroke').checked;
   const strokeWidth = p('sl-swidth');
-  const strokeOpacity = p('sl-sopacity') / 100;
+  const strokeOpacity = p('sl-sopacity')/100;
   const {r,g,b} = hexToRgb(fillColor);
   const {r:sr,g:sg,b:sb} = hexToRgb(strokeColor);
   ctx.save();
   ctx.beginPath();
   chains.forEach(c => { smoothPath(c); ctx.closePath(); });
-  if (fillOpacity > 0) { ctx.fillStyle=`rgba(${r},${g},${b},${fillOpacity})`; ctx.fill('evenodd'); }
-  if (strokeOn) {
-    ctx.strokeStyle=`rgba(${sr},${sg},${sb},${strokeOpacity})`;
-    ctx.lineWidth=strokeWidth; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
-  }
+  if (fillOpacity>0){ctx.fillStyle=`rgba(${r},${g},${b},${fillOpacity})`;ctx.fill('evenodd');}
+  if (strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${strokeOpacity})`;ctx.lineWidth=strokeWidth;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
   ctx.restore();
 }
 
 function exportSVG() {
   const chains = getChains(false);
   if (!chains || !chains.length) return;
-  const fillOpacity = p('sl-opacity') / 100;
+  const fillOpacity = p('sl-opacity')/100;
   const strokeOn = document.getElementById('ck-stroke').checked;
   const strokeWidth = p('sl-swidth');
-  const strokeOpacity = p('sl-sopacity') / 100;
+  const strokeOpacity = p('sl-sopacity')/100;
   function pathD(pts) {
-    if (pts.length < 2) return '';
-    let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-    for (let i = 0; i < pts.length-1; i++) {
-      const mx = ((pts[i].x+pts[i+1].x)/2).toFixed(1), my = ((pts[i].y+pts[i+1].y)/2).toFixed(1);
-      if (i===0) d += ` L${mx},${my}`;
-      else d += ` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mx},${my}`;
+    if(pts.length<2) return '';
+    let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+    for(let i=0;i<pts.length-1;i++){
+      const mx=((pts[i].x+pts[i+1].x)/2).toFixed(1),my=((pts[i].y+pts[i+1].y)/2).toFixed(1);
+      if(i===0) d+=` L${mx},${my}`;
+      else d+=` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mx},${my}`;
     }
-    d += ` L${pts[pts.length-1].x.toFixed(1)},${pts[pts.length-1].y.toFixed(1)} Z`;
+    d+=` L${pts[pts.length-1].x.toFixed(1)},${pts[pts.length-1].y.toFixed(1)} Z`;
     return d;
   }
-  const d = chains.map(c => pathD(c)).join(' ');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">
+  const d = chains.map(c=>pathD(c)).join(' ');
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}">
 <rect width="100%" height="100%" fill="#f5f5f0"/>
 <path d="${d}" fill="${fillOpacity>0?fillColor:'none'}" fill-opacity="${fillOpacity}" fill-rule="evenodd"
   stroke="${strokeOn?strokeColor:'none'}" stroke-width="${strokeOn?strokeWidth:0}"
   stroke-opacity="${strokeOpacity}" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>`;
-  const blob = new Blob([svg], {type:'image/svg+xml'});
-  const a = document.createElement('a'); a.download='blobit.svg'; a.href=URL.createObjectURL(blob); a.click();
+  const blob=new Blob([svg],{type:'image/svg+xml'});
+  const a=document.createElement('a');a.download='blobit.svg';a.href=URL.createObjectURL(blob);a.click();
 }
 </script>
 </body>
