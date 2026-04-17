@@ -774,33 +774,44 @@ function traceChains(edge,w,h,minLen){
 
 function applyImageEdge(){
   if(!uploadedImage) return;
-  artboard.bgImage=uploadedImage;
-  const ab=artboard;
-  const oc=document.createElement('canvas');
-  const scale=Math.min(ab.w/uploadedImage.width,ab.h/uploadedImage.height);
-  oc.width=Math.floor(uploadedImage.width*scale);oc.height=Math.floor(uploadedImage.height*scale);
-  const oc2=oc.getContext('2d');oc2.drawImage(uploadedImage,0,0,oc.width,oc.height);
-  const id=oc2.getImageData(0,0,oc.width,oc.height);
-  const edgeMap=detectEdges(id,p('esens'),p('edetail'),p('eblur'));
-
-  // debug: show raw edge map as preview image
-  const dbg=document.createElement('canvas');dbg.width=oc.width;dbg.height=oc.height;
-  const dbg2=dbg.getContext('2d');const dbgId=dbg2.createImageData(oc.width,oc.height);
-  for(let i=0;i<oc.width*oc.height;i++){
-    const v=edgeMap[i]?255:0;
-    dbgId.data[i*4]=v;dbgId.data[i*4+1]=v;dbgId.data[i*4+2]=v;dbgId.data[i*4+3]=255;
+  artboard.bgImage = uploadedImage;
+  const ab = artboard;
+  // Scale image to fit artboard
+  const scale = Math.min(ab.w / uploadedImage.width, ab.h / uploadedImage.height);
+  const iw = Math.floor(uploadedImage.width * scale);
+  const ih = Math.floor(uploadedImage.height * scale);
+  // offset of image within artboard (centered)
+  const ox = (ab.w - iw) / 2;
+  const oy = (ab.h - ih) / 2;
+  // draw scaled image to offscreen canvas for pixel access
+  const oc = document.createElement('canvas');
+  oc.width = iw; oc.height = ih;
+  const oc2 = oc.getContext('2d');
+  oc2.drawImage(uploadedImage, 0, 0, iw, ih);
+  const id = oc2.getImageData(0, 0, iw, ih);
+  // detect edges on scaled image
+  const edgeMap = detectEdges(id, p('esens'), p('edetail'), p('eblur'));
+  // debug preview
+  const dbg = document.createElement('canvas');
+  dbg.width = iw; dbg.height = ih;
+  const dbg2 = dbg.getContext('2d');
+  const dbgId = dbg2.createImageData(iw, ih);
+  for(let i = 0; i < iw * ih; i++){
+    const v = edgeMap[i] ? 255 : 0;
+    dbgId.data[i*4]=v; dbgId.data[i*4+1]=v; dbgId.data[i*4+2]=v; dbgId.data[i*4+3]=255;
   }
-  dbg2.putImageData(dbgId,0,0);
-  const pv=document.getElementById('img-preview');
-  if(pv){pv.src=dbg.toDataURL();pv.style.display='block';}
-
-  const chains=traceChains(edgeMap,oc.width,oc.height,p('emin'));
-  const ox=(ab.w-oc.width)/2,oy=(ab.h-oc.height)/2;
-  ab.strokes=chains.map(c=>c.map(pt=>({x:pt.x+ox,y:pt.y+oy})));
+  dbg2.putImageData(dbgId, 0, 0);
+  const pv = document.getElementById('img-preview');
+  if(pv){ pv.src = dbg.toDataURL(); pv.style.display = 'block'; }
+  // trace chains in image coords, then convert to artboard-local coords
+  const chains = traceChains(edgeMap, iw, ih, p('emin'));
+  // chains[i] = [{x, y}] in image pixels -> convert to artboard local
+  ab.strokes = chains.map(chain => chain.map(pt => ({
+    x: pt.x + ox,  // artboard-local x
+    y: pt.y + oy   // artboard-local y
+  })));
   scheduleRender();
 }
-
-// ── BLOB FIELD ──
 function snoise(x,y){
   const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
   const h=(a,b)=>((Math.sin(a*127.1+b*311.7)*43758.5453)%1+1)%1;
