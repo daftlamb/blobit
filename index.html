@@ -57,7 +57,6 @@ input[type=range] { width:100%; accent-color:#1a1a1a; margin-bottom:6px; height:
   </div>
   <canvas id="main-canvas"></canvas>
 </div>
-
 <div id="quick-bar">
   <div class="swatch active" style="background:#ff6b9d" data-color="#ff6b9d"></div>
   <div class="swatch" style="background:#667eea" data-color="#667eea"></div>
@@ -68,7 +67,6 @@ input[type=range] { width:100%; accent-color:#1a1a1a; margin-bottom:6px; height:
   <input type="color" id="fill-color" value="#ff6b9d">
   <button id="panel-toggle">⋯</button>
 </div>
-
 <div id="drawer">
   <div id="drawer-inner">
     <div class="panel-section">
@@ -87,11 +85,11 @@ input[type=range] { width:100%; accent-color:#1a1a1a; margin-bottom:6px; height:
     <div class="divider"></div>
     <div class="panel-section">
       <h3>Warp Points</h3>
-      <div class="param-row"><label>Radius</label><span id="val-wradius">60</span></div>
-      <input type="range" id="sl-wradius" min="20" max="200" value="60">
-      <div class="param-row"><label>Strength</label><span id="val-wstrength">50</span></div>
-      <input type="range" id="sl-wstrength" min="1" max="100" value="50">
-      <p class="hint">Tap canvas in Warp mode to add · Long-press / right-click to remove</p>
+      <div class="param-row"><label>Radius</label><span id="val-wradius">80</span></div>
+      <input type="range" id="sl-wradius" min="20" max="300" value="80">
+      <div class="param-row"><label>Strength</label><span id="val-wstrength">60</span></div>
+      <input type="range" id="sl-wstrength" min="1" max="100" value="60">
+      <p class="hint">Draw blobs first, then switch to Warp and tap to place points. Right-click / long-press to remove.</p>
     </div>
     <div class="divider"></div>
     <div class="panel-section">
@@ -132,7 +130,7 @@ input[type=range] { width:100%; accent-color:#1a1a1a; margin-bottom:6px; height:
       <input type="range" id="sl-eblur" min="0" max="5" step="0.5" value="1">
       <div class="param-row"><label>Min chain</label><span id="val-emin">8</span></div>
       <input type="range" id="sl-emin" min="2" max="40" step="1" value="8">
-      <p class="hint">Low/High = Canny hysteresis thresholds · Min chain = minimum edge length kept</p>
+      <p class="hint">Low/High = Canny hysteresis · Min chain = shortest edge kept</p>
       <button class="action-btn" id="btn-apply-img">Apply to Canvas</button>
     </div>
     <div class="divider"></div>
@@ -199,7 +197,6 @@ function getPos(e){
   const r=canvas.getBoundingClientRect(),src=e.touches?e.touches[0]:e;
   return{x:(src.clientX-r.left)*(canvas.width/r.width),y:(src.clientY-r.top)*(canvas.height/r.height)};
 }
-
 function onStart(e){
   if(e.target!==canvas) return; e.preventDefault();
   const pos=getPos(e);
@@ -226,7 +223,7 @@ function onEnd(){
 function onRightClick(e){
   if(currentTool!=='warp') return; e.preventDefault();
   const pos=getPos(e);
-  let best=-1,bestD=60*60;
+  let best=-1,bestD=80*80;
   warpPoints.forEach((wp,i)=>{const d=(wp.x-pos.x)**2+(wp.y-pos.y)**2;if(d<bestD){bestD=d;best=i;}});
   if(best>=0){warpPoints.splice(best,1);scheduleRender();}
 }
@@ -239,13 +236,12 @@ canvas.addEventListener('touchstart',onStart,{passive:false});
 canvas.addEventListener('touchmove',onMove,{passive:false});
 canvas.addEventListener('touchend',onEnd);
 canvas.addEventListener('touchcancel',onEnd);
-
 let touchHoldTimer=null;
 canvas.addEventListener('touchstart',e=>{
   if(currentTool!=='warp') return;
   touchHoldTimer=setTimeout(()=>{
     const pos=getPos(e);
-    let best=-1,bestD=60*60;
+    let best=-1,bestD=80*80;
     warpPoints.forEach((wp,i)=>{const d=(wp.x-pos.x)**2+(wp.y-pos.y)**2;if(d<bestD){bestD=d;best=i;}});
     if(best>=0){warpPoints.splice(best,1);scheduleRender();}
   },600);
@@ -295,53 +291,35 @@ function handleFile(file){
 }
 document.getElementById('btn-apply-img').addEventListener('click',applyImageEdge);
 
-// --- Canny edge detection + BFS chain tracing ---
 function gaussianBlur(gray,w,h,sigma){
   if(sigma<=0) return gray;
-  const r=Math.ceil(sigma*2),size=2*r+1;
-  const k=new Float32Array(size);
+  const r=Math.ceil(sigma*2),size=2*r+1,k=new Float32Array(size);
   let sum=0;
   for(let i=0;i<size;i++){k[i]=Math.exp(-((i-r)**2)/(2*sigma*sigma));sum+=k[i];}
   for(let i=0;i<size;i++) k[i]/=sum;
   const tmp=new Float32Array(w*h),out=new Float32Array(w*h);
-  // horizontal
   for(let y=0;y<h;y++) for(let x=0;x<w;x++){
-    let v=0;
-    for(let i=0;i<size;i++){const xi=Math.max(0,Math.min(w-1,x+i-r));v+=gray[y*w+xi]*k[i];}
-    tmp[y*w+x]=v;
+    let v=0;for(let i=0;i<size;i++){const xi=Math.max(0,Math.min(w-1,x+i-r));v+=gray[y*w+xi]*k[i];}tmp[y*w+x]=v;
   }
-  // vertical
   for(let y=0;y<h;y++) for(let x=0;x<w;x++){
-    let v=0;
-    for(let i=0;i<size;i++){const yi=Math.max(0,Math.min(h-1,y+i-r));v+=tmp[yi*w+x]*k[i];}
-    out[y*w+x]=v;
+    let v=0;for(let i=0;i<size;i++){const yi=Math.max(0,Math.min(h-1,y+i-r));v+=tmp[yi*w+x]*k[i];}out[y*w+x]=v;
   }
   return out;
 }
-
-function cannyEdge(imgData, lowT, highT, sigma){
-  const w=imgData.width, h=imgData.height, d=imgData.data;
-  // grayscale
+function cannyEdge(imgData,lowT,highT,sigma){
+  const w=imgData.width,h=imgData.height,d=imgData.data;
   const gray=new Float32Array(w*h);
   for(let i=0;i<w*h;i++) gray[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
-  // gaussian blur
   const bl=gaussianBlur(gray,w,h,sigma);
-  // sobel
-  const mag=new Float32Array(w*h), ang=new Float32Array(w*h);
+  const mag=new Float32Array(w*h),ang=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
-    const gx=-bl[(y-1)*w+(x-1)]-2*bl[y*w+(x-1)]-bl[(y+1)*w+(x-1)]
-             +bl[(y-1)*w+(x+1)]+2*bl[y*w+(x+1)]+bl[(y+1)*w+(x+1)];
-    const gy=-bl[(y-1)*w+(x-1)]-2*bl[(y-1)*w+x]-bl[(y-1)*w+(x+1)]
-             +bl[(y+1)*w+(x-1)]+2*bl[(y+1)*w+x]+bl[(y+1)*w+(x+1)];
-    mag[y*w+x]=Math.sqrt(gx*gx+gy*gy);
-    ang[y*w+x]=Math.atan2(gy,gx);
+    const gx=-bl[(y-1)*w+(x-1)]-2*bl[y*w+(x-1)]-bl[(y+1)*w+(x-1)]+bl[(y-1)*w+(x+1)]+2*bl[y*w+(x+1)]+bl[(y+1)*w+(x+1)];
+    const gy=-bl[(y-1)*w+(x-1)]-2*bl[(y-1)*w+x]-bl[(y-1)*w+(x+1)]+bl[(y+1)*w+(x-1)]+2*bl[(y+1)*w+x]+bl[(y+1)*w+(x+1)];
+    mag[y*w+x]=Math.sqrt(gx*gx+gy*gy);ang[y*w+x]=Math.atan2(gy,gx);
   }
-  // non-maximum suppression
   const nms=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
-    const a=ang[y*w+x],m=mag[y*w+x];
-    // quantize angle to 4 directions
-    const deg=((a*180/Math.PI)%180+180)%180;
+    const m=mag[y*w+x],deg=((ang[y*w+x]*180/Math.PI)%180+180)%180;
     let n1,n2;
     if(deg<22.5||deg>=157.5){n1=mag[y*w+(x-1)];n2=mag[y*w+(x+1)];}
     else if(deg<67.5){n1=mag[(y-1)*w+(x+1)];n2=mag[(y+1)*w+(x-1)];}
@@ -349,14 +327,9 @@ function cannyEdge(imgData, lowT, highT, sigma){
     else{n1=mag[(y-1)*w+(x-1)];n2=mag[(y+1)*w+(x+1)];}
     nms[y*w+x]=(m>=n1&&m>=n2)?m:0;
   }
-  // double threshold + hysteresis BFS
-  const STRONG=2,WEAK=1,NONE=0;
+  const STRONG=2,WEAK=1;
   const edge=new Uint8Array(w*h);
-  for(let i=0;i<w*h;i++){
-    if(nms[i]>=highT) edge[i]=STRONG;
-    else if(nms[i]>=lowT) edge[i]=WEAK;
-  }
-  // BFS from strong edges to connect weak
+  for(let i=0;i<w*h;i++){if(nms[i]>=highT)edge[i]=STRONG;else if(nms[i]>=lowT)edge[i]=WEAK;}
   const queue=[];
   for(let i=0;i<w*h;i++) if(edge[i]===STRONG) queue.push(i);
   const dx8=[-1,0,1,-1,1,-1,0,1],dy8=[-1,-1,-1,0,0,1,1,1];
@@ -366,62 +339,45 @@ function cannyEdge(imgData, lowT, highT, sigma){
     for(let d=0;d<8;d++){
       const nx=x+dx8[d],ny=y+dy8[d];
       if(nx<0||nx>=w||ny<0||ny>=h) continue;
-      const ni=ny*w+nx;
-      if(edge[ni]===WEAK){edge[ni]=STRONG;queue.push(ni);}
+      const ni=ny*w+nx;if(edge[ni]===WEAK){edge[ni]=STRONG;queue.push(ni);}
     }
   }
-  // zero out remaining weak
   for(let i=0;i<w*h;i++) if(edge[i]===WEAK) edge[i]=0;
-  return edge; // binary edge map
+  return edge;
 }
-
-// BFS chain tracing on binary edge map — produces ordered polylines
-function traceChains(edge, w, h, minLen){
-  const visited=new Uint8Array(w*h), chains=[];
-  const dx8=[-1,0,1,-1,1,-1,0,1], dy8=[-1,-1,-1,0,0,1,1,1];
+function traceChains(edge,w,h,minLen){
+  const visited=new Uint8Array(w*h),chains=[];
+  const dx8=[-1,0,1,-1,1,-1,0,1],dy8=[-1,-1,-1,0,0,1,1,1];
   for(let sy=1;sy<h-1;sy++) for(let sx=1;sx<w-1;sx++){
-    const si=sy*w+sx;
-    if(!edge[si]||visited[si]) continue;
-    // find endpoint or junction: pixel with exactly 1 or 0 neighbors
-    // start BFS/DFS trace
-    visited[si]=1;
-    const chain=[{x:sx,y:sy}];
-    let cx=sx,cy=sy;
-    let extended=true;
+    const si=sy*w+sx;if(!edge[si]||visited[si]) continue;
+    visited[si]=1;const chain=[{x:sx,y:sy}];let cx=sx,cy=sy,extended=true;
     while(extended){
       extended=false;
       for(let d=0;d<8;d++){
         const nx=cx+dx8[d],ny=cy+dy8[d];
         if(nx<0||nx>=w||ny<0||ny>=h) continue;
         const ni=ny*w+nx;
-        if(edge[ni]&&!visited[ni]){
-          visited[ni]=1;chain.push({x:nx,y:ny});cx=nx;cy=ny;extended=true;break;
-        }
+        if(edge[ni]&&!visited[ni]){visited[ni]=1;chain.push({x:nx,y:ny});cx=nx;cy=ny;extended=true;break;}
       }
     }
     if(chain.length>=minLen) chains.push(chain);
   }
   return chains;
 }
-
 function applyImageEdge(){
   if(!uploadedImage) return;
   const oc=document.createElement('canvas');
-  const scale=Math.min(canvas.width/uploadedImage.width, canvas.height/uploadedImage.height);
-  oc.width=Math.floor(uploadedImage.width*scale);
-  oc.height=Math.floor(uploadedImage.height*scale);
-  const oc2=oc.getContext('2d');
-  oc2.drawImage(uploadedImage,0,0,oc.width,oc.height);
+  const scale=Math.min(canvas.width/uploadedImage.width,canvas.height/uploadedImage.height);
+  oc.width=Math.floor(uploadedImage.width*scale);oc.height=Math.floor(uploadedImage.height*scale);
+  const oc2=oc.getContext('2d');oc2.drawImage(uploadedImage,0,0,oc.width,oc.height);
   const id=oc2.getImageData(0,0,oc.width,oc.height);
-  const lowT=p('sl-elow'), highT=p('sl-ehigh'), sigma=p('sl-eblur'), minLen=p('sl-emin');
-  const edgeMap=cannyEdge(id, lowT, highT, sigma);
-  const chains=traceChains(edgeMap, oc.width, oc.height, minLen);
-  const ox=(canvas.width-oc.width)/2, oy=(canvas.height-oc.height)/2;
-  strokes=chains.map(c=>c.map(pt=>({x:pt.x+ox, y:pt.y+oy})));
+  const edgeMap=cannyEdge(id,p('sl-elow'),p('sl-ehigh'),p('sl-eblur'));
+  const chains=traceChains(edgeMap,oc.width,oc.height,p('sl-emin'));
+  const ox=(canvas.width-oc.width)/2,oy=(canvas.height-oc.height)/2;
+  strokes=chains.map(c=>c.map(pt=>({x:pt.x+ox,y:pt.y+oy})));
   scheduleRender();
 }
 
-// --- blob field + marching squares ---
 function snoise(x,y){
   const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
   const h=(a,b)=>((Math.sin(a*127.1+b*311.7)*43758.5453)%1+1)%1;
@@ -452,21 +408,22 @@ function buildField(pts,r,cols,rows,step){
   }
   return grid;
 }
-function applyWarpPoints(grid,cols,rows,step,wpts){
-  if(!wpts.length) return;
-  for(let row=0;row<rows;row++) for(let col=0;col<cols;col++){
-    const wx=col*step,wy=row*step;
-    for(const wp of wpts){
-      const dx=wx-wp.x,dy=wy-wp.y,d2=dx*dx+dy*dy,r2=wp.r*wp.r;
-      if(d2>=r2) continue;
-      const falloff=(1-d2/r2)**2;
-      grid[row*cols+col]+=falloff*wp.strength*0.8;
-      const nf=0.04+wp.strength*0.03;
-      const noise=snoise(wx*nf,wy*nf)*0.5+snoise(wx*nf*2.1+7,wy*nf*2.1+13)*0.3;
-      grid[row*cols+col]+=falloff*wp.strength*0.6*noise;
-    }
+
+// warp: per-cell local threshold reduction — directly visible effect
+function getLocalThreshMult(col,row,step,thresh,wpts){
+  if(!wpts.length) return thresh;
+  const wx=col*step,wy=row*step;
+  let reduction=0;
+  for(const wp of wpts){
+    const dx=wx-wp.x,dy=wy-wp.y,d2=dx*dx+dy*dy,r2=wp.r*wp.r;
+    if(d2>=r2) continue;
+    const falloff=(1-d2/r2)**2;
+    // reduce threshold by up to 80% at center
+    reduction=Math.max(reduction,falloff*wp.strength*0.8);
   }
+  return thresh*(1-reduction);
 }
+
 function warpedSample(grid,cols,rows,col,row,nd,nf){
   if(nd<=0){const c=Math.max(0,Math.min(cols-1,col)),r=Math.max(0,Math.min(rows-1,row));return grid[r*cols+c];}
   const wc=col+snoise(col*nf,row*nf)*nd,wr=row+snoise(col*nf+31.41,row*nf+27.18)*nd;
@@ -477,20 +434,25 @@ function warpedSample(grid,cols,rows,col,row,nd,nf){
   return(grid[rr0*cols+cc0]*(1-fc)+grid[rr0*cols+cc1]*fc)*(1-fr)
         +(grid[rr1*cols+cc0]*(1-fc)+grid[rr1*cols+cc1]*fc)*fr;
 }
-function march(grid,cols,rows,step,thresh,nd,nf){
-  const segs=[],sv=(c,r)=>warpedSample(grid,cols,rows,c,r,nd,nf);
-  const interp=(ax,ay,bx,by,va,vb)=>{const t=(thresh-va)/(vb-va);return{x:ax+(bx-ax)*t,y:ay+(by-ay)*t};};
+
+// marching squares with per-cell local threshold
+function march(grid,cols,rows,step,thresh,nd,nf,wpts){
+  const segs=[];
+  const sv=(c,r)=>warpedSample(grid,cols,rows,c,r,nd,nf);
+  const interp=(ax,ay,bx,by,va,vb,t)=>{const f=(t-va)/(vb-va);return{x:ax+(bx-ax)*f,y:ay+(by-ay)*f};};
   for(let r=0;r<rows-1;r++) for(let c=0;c<cols-1;c++){
     const x=c*step,y=r*step,x1=x+step,y1=y+step;
+    // local threshold for this cell
+    const lt=wpts.length?getLocalThreshMult(c,r,step,thresh,wpts):thresh;
     const v00=sv(c,r),v10=sv(c+1,r),v01=sv(c,r+1),v11=sv(c+1,r+1);
-    const idx=(v00>thresh?8:0)|(v10>thresh?4:0)|(v11>thresh?2:0)|(v01>thresh?1:0);
+    const idx=(v00>lt?8:0)|(v10>lt?4:0)|(v11>lt?2:0)|(v01>lt?1:0);
     if(idx===0||idx===15) continue;
-    const T=interp(x,y,x1,y,v00,v10),R=interp(x1,y,x1,y1,v10,v11);
-    const B=interp(x,y1,x1,y1,v01,v11),L=interp(x,y,x,y1,v00,v01);
+    const T=interp(x,y,x1,y,v00,v10,lt),R=interp(x1,y,x1,y1,v10,v11,lt);
+    const B=interp(x,y1,x1,y1,v01,v11,lt),L=interp(x,y,x,y1,v00,v01,lt);
     if(idx===5||idx===10){
       const center=(v00+v10+v01+v11)*0.25;
-      if(idx===5){if(center>thresh){segs.push([T,R],[B,L]);}else{segs.push([T,L],[R,B]);}}
-      else{if(center>thresh){segs.push([T,L],[R,B]);}else{segs.push([T,R],[B,L]);}}
+      if(idx===5){if(center>lt){segs.push([T,R],[B,L]);}else{segs.push([T,L],[R,B]);}}
+      else{if(center>lt){segs.push([T,L],[R,B]);}else{segs.push([T,R],[B,L]);}}
       continue;
     }
     const tbl={1:[[B,L]],2:[[R,B]],3:[[R,L]],4:[[T,R]],6:[[T,B]],7:[[T,L]],
@@ -549,12 +511,11 @@ function getChains(live){
   all.forEach(s=>resample(s,Math.max(2,radius*0.35)).forEach(pt=>allPts.push(pt)));
   if(!allPts.length) return null;
   const grid=buildField(allPts,radius,cols,rows,step);
-  if(warpPoints.length) applyWarpPoints(grid,cols,rows,step,warpPoints);
   let maxVal=0;
   for(let i=0;i<grid.length;i++) if(grid[i]>maxVal) maxVal=grid[i];
   if(maxVal<0.01) return null;
   const thresh=maxVal*(0.18+loose*0.37)*(0.5+(1-smoothness)*0.5);
-  const segs=march(grid,cols,rows,step,thresh,noiseAmt*4.5,0.18+noiseAmt*0.25);
+  const segs=march(grid,cols,rows,step,thresh,noiseAmt*4.5,0.18+noiseAmt*0.25,warpPoints);
   return chain(segs);
 }
 function scheduleRender(live){
@@ -575,13 +536,15 @@ function render(live){
     if(strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${so})`;ctx.lineWidth=sw;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
     ctx.restore();
   }
-  if(currentTool==='warp'){
+  // always show warp indicators when points exist
+  if(warpPoints.length){
     ctx.save();
     warpPoints.forEach(wp=>{
       ctx.beginPath();ctx.arc(wp.x,wp.y,wp.r,0,Math.PI*2);
-      ctx.strokeStyle='rgba(255,100,50,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();
-      ctx.beginPath();ctx.arc(wp.x,wp.y,4,0,Math.PI*2);
-      ctx.fillStyle='rgba(255,100,50,0.8)';ctx.fill();ctx.setLineDash([]);
+      ctx.strokeStyle=currentTool==='warp'?'rgba(255,100,50,0.6)':'rgba(255,100,50,0.25)';
+      ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();
+      ctx.beginPath();ctx.arc(wp.x,wp.y,5,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,100,50,0.7)';ctx.fill();ctx.setLineDash([]);
     });
     ctx.restore();
   }
