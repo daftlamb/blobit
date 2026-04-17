@@ -197,23 +197,25 @@ function resample(pts, spacing) {
   return out;
 }
 
-// build metaball field with optional noise perturbation
+// build metaball field — noise applied to sample coordinates for organic edge deformation
 function buildField(pts, r, noiseAmt, cols, rows, step) {
   const cutoff2=4*r*r;
   const grid=new Float32Array(cols*rows);
-  const ns = r * 1.5; // noise scale
-  for (let i=0;i<pts.length;i++) {
-    let px=pts[i].x, py=pts[i].y;
+  const ns = r * 2.5; // noise scale relative to blob size
+  for (let row=0;row<rows;row++) for (let col=0;col<cols;col++) {
+    let sx = col*step, sy = row*step;
+    // perturb sample position — this deforms the isoline boundary
     if (noiseAmt > 0) {
-      px += snoise(px*0.01, py*0.01, ns) * noiseAmt * r * 0.6;
-      py += snoise(px*0.01+99, py*0.01+99, ns) * noiseAmt * r * 0.6;
+      const disp = noiseAmt * r * 0.7;
+      sx += snoise(sx, sy, ns) * disp;
+      sy += snoise(sx + 7919, sy + 6271, ns) * disp;
     }
-    const c0=Math.max(0,Math.floor((px-2*r)/step)), c1=Math.min(cols-1,Math.ceil((px+2*r)/step));
-    const r0=Math.max(0,Math.floor((py-2*r)/step)), r1=Math.min(rows-1,Math.ceil((py+2*r)/step));
-    for (let row=r0;row<=r1;row++) for (let col=c0;col<=c1;col++) {
-      const dx=col*step-px, dy=row*step-py, d2=dx*dx+dy*dy;
-      if (d2<cutoff2) grid[row*cols+col]+=(1-d2/cutoff2)**2;
+    let v = 0;
+    for (let i=0;i<pts.length;i++) {
+      const dx=sx-pts[i].x, dy=sy-pts[i].y, d2=dx*dx+dy*dy;
+      if (d2<cutoff2) v+=(1-d2/cutoff2)**2;
     }
+    grid[row*cols+col]=v;
   }
   return grid;
 }
