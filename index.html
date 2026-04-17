@@ -806,9 +806,9 @@ function applyImageEdge(){
   // trace chains in image coords, then convert to artboard-local coords
   const chains = traceChains(edgeMap, iw, ih, p('emin'));
   // chains[i] = [{x, y}] in image pixels -> convert to artboard local
-  ab.strokes = chains.map(chain => chain.map(pt => ({
-    x: pt.x + ox,  // artboard-local x
-    y: pt.y + oy   // artboard-local y
+  ab.edgeStrokes = chains.map(chain => chain.map(pt => ({
+    x: pt.x + ox,
+    y: pt.y + oy
   })));
   scheduleRender();
 }
@@ -1009,6 +1009,25 @@ function render(live){
     if(fo>0){ctx.fillStyle=`rgba(${r},${g},${b},${fo})`;ctx.fill('evenodd');}
     if(strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${so})`;ctx.lineWidth=sw2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
     ctx.restore();ctx.restore();
+  }
+
+  // draw image edge strokes
+  if(ab.edgeStrokes&&ab.edgeStrokes.length){
+    ctx.save();
+    ctx.beginPath();ctx.rect(sx,sy,sw,sh);ctx.clip();
+    ctx.translate(sx,sy);ctx.scale(vscale,vscale);
+    const ec=p('ecolor')||fillColor;
+    const{r:er,g:eg,b:eb}=hexToRgb(ec);
+    ctx.strokeStyle=`rgba(${er},${eg},${eb},0.85)`;
+    ctx.lineWidth=1.2/vscale;ctx.lineJoin='round';ctx.lineCap='round';
+    ab.edgeStrokes.forEach(chain=>{
+      if(chain.length<2) return;
+      ctx.beginPath();
+      ctx.moveTo(chain[0].x,chain[0].y);
+      for(let i=1;i<chain.length;i++) ctx.lineTo(chain[i].x,chain[i].y);
+      ctx.stroke();
+    });
+    ctx.restore();
   }
 
   // warp point handles
