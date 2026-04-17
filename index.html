@@ -412,7 +412,7 @@ function applyABSize(){
   const h=parseInt(document.getElementById('ab-h').value)||600;
   artboard.w=w;artboard.h=h;
   artboard.x=-w/2;artboard.y=-h/2;
-  updateABDisplay();centerView();scheduleRender();
+  updateABDisplay();resize();
 }
 document.getElementById('btn-ab-apply')?.addEventListener('click',applyABSize);
 document.querySelectorAll('.ab-pre').forEach(btn=>{
@@ -458,13 +458,15 @@ function handleFile(file){
 }
 
 // resize
-function resize(){canvas.width=area.clientWidth;canvas.height=area.clientHeight;scheduleRender();}
+function resize(){canvas.width=area.clientWidth;canvas.height=area.clientHeight;centerView();scheduleRender();}
 window.addEventListener('resize',resize);
 
 function centerView(){
   vscale=Math.min(canvas.width/artboard.w,canvas.height/artboard.h)*0.85;
-  vx=canvas.width/2-artboard.w/2*vscale;
-  vy=canvas.height/2-artboard.h/2*vscale;
+  // artboard world rect: x=artboard.x, y=artboard.y, w=artboard.w, h=artboard.h
+  // screen center of artboard = artboard.x*vscale + vx + artboard.w/2*vscale = canvas.width/2
+  vx=canvas.width/2-(artboard.x+artboard.w/2)*vscale;
+  vy=canvas.height/2-(artboard.y+artboard.h/2)*vscale;
   updateZoomLabel();
 }
 function updateZoomLabel(){const el=document.getElementById('zoom-label');if(el)el.textContent=Math.round(vscale*100)+'%';}
@@ -641,26 +643,56 @@ function gaussianBlur(gray,w,h,sigma){
   return out;
 }
 
-// Multi-scale edge detection: Canny + local contrast + luminance gradient
+// DoG (Difference of Gaussians) + local adaptive contrast edge detection
+// Much more sensitive to fine detail and texture than plain Canny
 function detectEdges(imgData, sensitivity, detail, sigma){
   const w=imgData.width,h=imgData.height,d=imgData.data;
-  // luminance
   const lum=new Float32Array(w*h);
   for(let i=0;i<w*h;i++) lum[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
-  // normalize sensitivity/detail to thresholds
-  const highT=255*(1-sensitivity/100)*0.8;
-  const lowT=highT*(0.3+detail/100*0.4);
-  const bl=gaussianBlur(lum,w,h,Math.max(0.5,sigma));
-  // Sobel
+
+  // DoG: blur with two sigmas, subtract -> zero-crossings = edges
+  const s1=Math.max(0.5,sigma);
+  const s2=s1*1.6; // classic DoG ratio
+  const b1=gaussianBlur(lum,w,h,s1);
+  const b2=gaussianBlur(lum,w,h,s2);
+  const dog=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) dog[i]=b1[i]-b2[i];
+
+  // local contrast normalization: divide by local std dev so dark/flat areas get boosted
+  const localR=Math.max(2,Math.round(s2*3));
+  const localBlur=gaussianBlur(lum,w,h,localR);
+  const localContrast=new Float32Array(w*h);
+  for(let y=localR;y<h-localR;y++) for(let x=localR;x<w-localR;x++){
+    let sum2=0,cnt=0;
+    for(let dy=-localR;dy<=localR;dy+=2) for(let dx=-localR;dx<=localR;dx+=2){
+      const v=lum[(y+dy)*w+(x+dx)]-localBlur[y*w+x];
+      sum2+=v*v;cnt++;
+    }
+    localContrast[y*w+x]=Math.sqrt(sum2/cnt)+1;
+  }
+
+  // normalized DoG response
+  const resp=new Float32Array(w*h);
+  let maxR=0;
+  for(let i=0;i<w*h;i++){
+    resp[i]=Math.abs(dog[i])/(localContrast[i]+0.5);
+    if(resp[i]>maxR) maxR=resp[i];
+  }
+  if(maxR<0.001) return new Uint8Array(w*h);
+
+  // also compute Sobel on original for strong structural edges
   const mag=new Float32Array(w*h),ang=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
-    const gx=-bl[(y-1)*w+(x-1)]-2*bl[y*w+(x-1)]-bl[(y+1)*w+(x-1)]
-             +bl[(y-1)*w+(x+1)]+2*bl[y*w+(x+1)]+bl[(y+1)*w+(x+1)];
-    const gy=-bl[(y-1)*w+(x-1)]-2*bl[(y-1)*w+x]-bl[(y-1)*w+(x+1)]
-             +bl[(y+1)*w+(x-1)]+2*bl[(y+1)*w+x]+bl[(y+1)*w+(x+1)];
+    const gx=-b1[(y-1)*w+(x-1)]-2*b1[y*w+(x-1)]-b1[(y+1)*w+(x-1)]
+             +b1[(y-1)*w+(x+1)]+2*b1[y*w+(x+1)]+b1[(y+1)*w+(x+1)];
+    const gy=-b1[(y-1)*w+(x-1)]-2*b1[(y-1)*w+x]-b1[(y-1)*w+(x+1)]
+             +b1[(y+1)*w+(x-1)]+2*b1[(y+1)*w+x]+b1[(y+1)*w+(x+1)];
     mag[y*w+x]=Math.sqrt(gx*gx+gy*gy);ang[y*w+x]=Math.atan2(gy,gx);
   }
-  // NMS
+  let maxM=0;for(let i=0;i<w*h;i++) if(mag[i]>maxM) maxM=mag[i];
+  if(maxM<0.001) maxM=1;
+
+  // NMS on Sobel
   const nms=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
     const m=mag[y*w+x],deg=((ang[y*w+x]*180/Math.PI)%180+180)%180;
@@ -671,17 +703,30 @@ function detectEdges(imgData, sensitivity, detail, sigma){
     else{n1=mag[(y-1)*w+(x-1)];n2=mag[(y+1)*w+(x+1)];}
     nms[y*w+x]=(m>=n1&&m>=n2)?m:0;
   }
-  // hysteresis
+
+  // combine: DoG catches fine texture, Sobel catches strong edges
+  // sensitivity controls overall threshold, detail controls DoG vs Sobel blend
+  const detailBlend=detail/100; // 0=Sobel only, 1=DoG dominant
+  const combined=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++){
+    combined[i]=(nms[i]/maxM)*(1-detailBlend*0.5)+(resp[i]/maxR)*detailBlend;
+  }
+
+  const highT=(1-sensitivity/100)*0.55+0.05;
+  const lowT=highT*0.35;
   const STRONG=2,WEAK=1,edge=new Uint8Array(w*h);
-  for(let i=0;i<w*h;i++){if(nms[i]>=highT)edge[i]=STRONG;else if(nms[i]>=lowT)edge[i]=WEAK;}
+  for(let i=0;i<w*h;i++){
+    if(combined[i]>=highT) edge[i]=STRONG;
+    else if(combined[i]>=lowT) edge[i]=WEAK;
+  }
   const queue=[];
   for(let i=0;i<w*h;i++) if(edge[i]===STRONG) queue.push(i);
   const dx8=[-1,0,1,-1,1,-1,0,1],dy8=[-1,-1,-1,0,0,1,1,1];
   let qi=0;
   while(qi<queue.length){
     const idx=queue[qi++],y=Math.floor(idx/w),x=idx%w;
-    for(let d2=0;d2<8;d2++){
-      const nx=x+dx8[d2],ny=y+dy8[d2];
+    for(let k=0;k<8;k++){
+      const nx=x+dx8[k],ny=y+dy8[k];
       if(nx<0||nx>=w||ny<0||ny>=h) continue;
       const ni=ny*w+nx;if(edge[ni]===WEAK){edge[ni]=STRONG;queue.push(ni);}
     }
@@ -761,13 +806,33 @@ function applyWarpToField(grid,cols,rows,step,wpts,thresh){
     const wr=wp.r,s=wp.strength,cutoff2=wr*wr;
     const c0=Math.max(0,Math.floor((wp.x-wr)/step)),c1=Math.min(cols-1,Math.ceil((wp.x+wr)/step));
     const r0=Math.max(0,Math.floor((wp.y-wr)/step)),r1=Math.min(rows-1,Math.ceil((wp.y+wr)/step));
-    for(let row=r0;row<=r1;row++) for(let col=c0;col<=c1;col++){
-      const dx=col*step-wp.x,dy=row*step-wp.y,d2=dx*dx+dy*dy;
-      if(d2>=cutoff2) continue;
-      const falloff=(1-d2/cutoff2)**2;
-      // explode: push field up (expand); blob: add a new blob kernel
-      if(wp.type==='blob') grid[row*cols+col]+=falloff*s*thresh*2.5;
-      else grid[row*cols+col]+=falloff*s*thresh*1.8; // explode = gentler push
+    if(wp.type==='blob'){
+      // blob: smooth radial fill
+      for(let row=r0;row<=r1;row++) for(let col=c0;col<=c1;col++){
+        const dx=col*step-wp.x,dy=row*step-wp.y,d2=dx*dx+dy*dy;
+        if(d2>=cutoff2) continue;
+        grid[row*cols+col]+=(1-d2/cutoff2)**2*s*thresh*2.5;
+      }
+    } else {
+      // explode: spike pattern - N radial spikes
+      const spikes=Math.round(8+s*16); // 8-24 spikes based on strength
+      const spikeLen=wp.r*(0.4+s*0.6);  // spike length scales with strength
+      const spikeW=0.18; // angular half-width of each spike (radians)
+      for(let row=r0;row<=r1;row++) for(let col=c0;col<=c1;col++){
+        const dx=col*step-wp.x,dy=row*step-wp.y,d2=dx*dx+dy*dy;
+        if(d2>=cutoff2) continue;
+        const d=Math.sqrt(d2),ang=Math.atan2(dy,dx);
+        // find nearest spike angle
+        const spikeIdx=Math.round(ang/(Math.PI*2/spikes));
+        const spikeAng=spikeIdx*(Math.PI*2/spikes);
+        const angDiff=Math.abs(((ang-spikeAng+Math.PI*3)%(Math.PI*2))-Math.PI);
+        // spike shape: narrow angular band, tapers at tip
+        const inSpike=angDiff<spikeW*(1-d/spikeLen*0.5);
+        if(!inSpike) continue;
+        const radialFall=Math.max(0,1-d/spikeLen);
+        const angFall=Math.max(0,1-angDiff/spikeW);
+        grid[row*cols+col]+=radialFall*angFall*s*thresh*3.5;
+      }
     }
   }
 }
