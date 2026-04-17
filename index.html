@@ -645,7 +645,6 @@ function gaussianBlur(gray,w,h,sigma){
 }
 
 // Edge detection: Di Zenzo color gradient + local normalization
-// Works on low-contrast images by using all 3 color channels independently
 function detectEdges(imgData,sensitivity,detail,sigma){
   const w=imgData.width,h=imgData.height,d=imgData.data;
 
@@ -653,14 +652,12 @@ function detectEdges(imgData,sensitivity,detail,sigma){
   const R=new Float32Array(w*h),G=new Float32Array(w*h),B=new Float32Array(w*h);
   for(let i=0;i<w*h;i++){R[i]=d[i*4];G[i]=d[i*4+1];B[i]=d[i*4+2];}
 
-  // Optional blur per channel (sigma=0 = raw pixels for max detail)
   const s=Math.max(0,sigma);
   const bR=s>0.3?gaussianBlur(R,w,h,s):R;
   const bG=s>0.3?gaussianBlur(G,w,h,s):G;
   const bB=s>0.3?gaussianBlur(B,w,h,s):B;
 
-  // Di Zenzo color gradient: sqrt(Rx²+Gx²+Bx²+Ry²+Gy²+By²)
-  // This detects edges even when luminance is identical across boundary
+  // Di Zenzo color gradient
   const mag=new Float32Array(w*h),ang=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
     let gx2=0,gy2=0,gxy=0;
@@ -671,14 +668,12 @@ function detectEdges(imgData,sensitivity,detail,sigma){
                +ch[(y+1)*w+(x-1)]+2*ch[(y+1)*w+x]+ch[(y+1)*w+(x+1)];
       gx2+=gx*gx;gy2+=gy*gy;gxy+=gx*gy;
     }
-    // dominant direction
-    const theta=0.5*Math.atan2(2*gxy,gx2-gy2);
     const F=0.5*(gx2+gy2+Math.sqrt((gx2-gy2)**2+4*gxy*gxy));
     mag[y*w+x]=Math.sqrt(Math.max(0,F));
-    ang[y*w+x]=theta;
+    ang[y*w+x]=0.5*Math.atan2(2*gxy,gx2-gy2);
   }
 
-  // NMS along gradient direction
+  // NMS
   const nms=new Float32Array(w*h);
   for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
     const m=mag[y*w+x];if(m===0) continue;
@@ -691,13 +686,19 @@ function detectEdges(imgData,sensitivity,detail,sigma){
     nms[y*w+x]=(m>=n1&&m>=n2)?m:0;
   }
 
-  // Local normalization: makes weak edges in low-contrast regions visible
-  // Box blur approximation of local mean
-  const winR=Math.max(3,Math.round(Math.min(w,h)/50));
+  // Global max normalize first (0-1 range)
+  let globalMax=0;
+  for(let i=0;i<w*h;i++) if(nms[i]>globalMax) globalMax=nms[i];
+  if(globalMax<1) globalMax=1;
+  const normG=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) normG[i]=nms[i]/globalMax;
+
+  // Local normalization (box blur on normG)
+  const winR=Math.max(3,Math.round(Math.min(w,h)/40));
   const tmp=new Float32Array(w*h),localMean=new Float32Array(w*h);
   for(let y=0;y<h;y++) for(let x=0;x<w;x++){
     let s2=0,cnt=0;
-    for(let dx=-winR;dx<=winR;dx++){const xi=Math.max(0,Math.min(w-1,x+dx));s2+=nms[y*w+xi];cnt++;}
+    for(let dx=-winR;dx<=winR;dx++){const xi=Math.max(0,Math.min(w-1,x+dx));s2+=normG[y*w+xi];cnt++;}
     tmp[y*w+x]=s2/cnt;
   }
   for(let y=0;y<h;y++) for(let x=0;x<w;x++){
@@ -706,32 +707,34 @@ function detectEdges(imgData,sensitivity,detail,sigma){
     localMean[y*w+x]=s2/cnt;
   }
 
-  // detail=0: global normalization only (main outlines)
-  // detail=100: strong local normalization (reveals fine texture/veins)
+  // Blend global and local normalization
   const db=detail/100;
-  let globalMax=0;
-  for(let i=0;i<w*h;i++) if(nms[i]>globalMax) globalMax=nms[i];
-  if(globalMax<1) globalMax=1;
   const normalized=new Float32Array(w*h);
   for(let i=0;i<w*h;i++){
-    const globalN=nms[i]/globalMax;
-    const localRef=Math.max(localMean[i]*4,globalMax*0.02);
-    const localN=nms[i]/localRef;
-    normalized[i]=globalN*(1-db)+Math.min(1,localN)*db;
+    const localRef=Math.max(localMean[i]*3,0.02);
+    const localN=Math.min(1,normG[i]/localRef);
+    normalized[i]=normG[i]*(1-db)+localN*db;
   }
+  // normalized is now strictly 0-1
 
-  // Histogram percentile threshold
+  // Histogram on 0-1 range, 1000 bins
   const hist=new Int32Array(1000);
   for(let i=0;i<w*h;i++) hist[Math.min(999,Math.floor(normalized[i]*999))]++;
-  const keepFrac=0.005+sensitivity/100*0.22;
+
+  // sensitivity=0 -> keep top 1%, sensitivity=100 -> keep top 12%
+  const keepFrac=0.01+sensitivity/100*0.11;
   let cumul=0,highBin=999;
-  for(let b=999;b>=0;b--){cumul+=hist[b];if(cumul/(w*h)>=keepFrac){highBin=b;break;}}
-  const highT=highBin/999,lowT=highT*0.3;
+  for(let b=999;b>=0;b--){
+    cumul+=hist[b];
+    if(cumul/(w*h)>=keepFrac){highBin=b;break;}
+  }
+  const highT=highBin/999;
+  const lowT=highT*0.35;
 
   const STRONG=2,WEAK=1,edge=new Uint8Array(w*h);
   for(let i=0;i<w*h;i++){
-    const v=normalized[i];
-    if(v>=highT)edge[i]=STRONG;else if(v>=lowT)edge[i]=WEAK;
+    if(normalized[i]>=highT)edge[i]=STRONG;
+    else if(normalized[i]>=lowT)edge[i]=WEAK;
   }
   const queue=[];
   for(let i=0;i<w*h;i++) if(edge[i]===STRONG) queue.push(i);
