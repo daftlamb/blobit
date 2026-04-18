@@ -1046,13 +1046,16 @@ function render(live){
 
   // draw image edge strokes
   if(ab.edgeStrokes&&ab.edgeStrokes.length){
-    const ec=document.getElementById('sl-ecolor')?.value||p('ecolor')||'#000000';
-    const rgb=hexToRgb(ec);
-    ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.85)`;
-    ctx.lineWidth=1;ctx.lineJoin='round';ctx.lineCap='round';
+    const palette=[...document.querySelectorAll('.ecs')].map(e=>e.dataset.c).filter(Boolean);
+    const customCol=document.getElementById('sl-ecolor')?.value;
+    const useCustom=palette.length===0;
     const jitter=parseFloat(p('ejitter'))||0;
-    ab.edgeStrokes.forEach(s=>{
+    ctx.lineWidth=1;ctx.lineJoin='round';ctx.lineCap='round';
+    ab.edgeStrokes.forEach((s,si)=>{
       if(s.length<2)return;
+      const col=useCustom?customCol:palette[si%palette.length];
+      const rgb=hexToRgb(col||'#000000');
+      ctx.strokeStyle=`rgba(${rgb.r},${rgb.g},${rgb.b},0.85)`;
       ctx.beginPath();
       const j=()=>jitter?(Math.random()-.5)*jitter*vscale:0;
       ctx.moveTo(sx+s[0].x*vscale+j(),sy+s[0].y*vscale+j());
