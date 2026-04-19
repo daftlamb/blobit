@@ -347,7 +347,7 @@ let currentStroke=null,isDrawing=false;
 let fillColor='#ff6b9d',strokeColor='#1a1a1a';
 let rafId=null,holdTimer=null,holdActive=false,uploadedImage=null;
 let drawerOpen=false,currentTool='draw',symmetryMode='none';
-let offscreenCache=null,offscreenDirty=true;
+let offscreenCache=null,offscreenDirty=true,branchBase=0;
 let warpType='explode'; // 'explode' | 'blob'
 // pan
 let isPanning=false,panStart={x:0,y:0},panOrigin={x:0,y:0},spaceDown=false;
@@ -584,8 +584,7 @@ function onStart(e){
     artboard.warpPoints.push({x:lp.x,y:lp.y,r:80,strength:p('wstrength')/100,type:warpType});
     invalidateCache();return;
   }
-  isDrawing=true;holdActive=false;artboard.strokes=artboard.strokes.filter(s=>!s._branch);currentStroke=[{x:lp.x,y:lp.y}];
-  if(pck('branch')) holdTimer=setTimeout(()=>{holdActive=true;growBranches();},500);
+  isDrawing=true;holdActive=false;artboard.strokes=artboard.strokes.filter(s=>!s._branch);currentStroke=[{x:lp.x,y:lp.y}];branchBase=artboard.strokes.length;
 }
 
 function onMove(e){
@@ -613,7 +612,7 @@ function onMove(e){
   if(!isDrawing||currentTool!=='draw') return;
   const lp=getLocalPos(e);
   const last=currentStroke[currentStroke.length-1];
-  if((lp.x-last.x)**2+(lp.y-last.y)**2>4/vscale/vscale){currentStroke.push({x:lp.x,y:lp.y});scheduleRender(true);}
+  if((lp.x-last.x)**2+(lp.y-last.y)**2>4/vscale/vscale){currentStroke.push({x:lp.x,y:lp.y});scheduleRender(true);if(pck('branch')&&isDrawing){if(holdTimer)clearTimeout(holdTimer);holdActive=false;holdTimer=setTimeout(()=>{holdActive=true;growBranches();},600);}}
 }
 
 function onEnd(){
