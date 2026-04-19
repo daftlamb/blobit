@@ -424,12 +424,22 @@ function setTool(t){
 
 // space = pan
 window.addEventListener('keydown',e=>{
-  if(e.code==='Space'&&!e.repeat&&e.target===document.body){
+  if((e.code==='Space'||e.code==='KeyH')&&!e.repeat&&e.target===document.body){
     e.preventDefault();spaceDown=true;area.style.cursor='grab';
   }
 });
 window.addEventListener('keyup',e=>{
-  if(e.code==='Space'){spaceDown=false;area.style.cursor=currentTool==='draw'?'crosshair':'default';}
+  if(e.code==='Space'||e.code==='KeyH'){spaceDown=false;area.style.cursor=currentTool==='draw'?'crosshair':'default';}
+});
+// middle mouse button pan
+area.addEventListener('mousedown',e=>{
+  if(e.button===1){e.preventDefault();isPanning=true;panStart={x:e.clientX,y:e.clientY};panOrigin={x:vx,y:vy};area.style.cursor='grabbing';}
+});
+area.addEventListener('mousemove',e=>{
+  if(isPanning&&e.buttons===4){vx=panOrigin.x+(e.clientX-panStart.x);vy=panOrigin.y+(e.clientY-panStart.y);scheduleRender();}
+});
+area.addEventListener('mouseup',e=>{
+  if(e.button===1&&isPanning){isPanning=false;area.style.cursor=spaceDown?'grab':currentTool==='draw'?'crosshair':'default';}
 });
 
 // mobile drawer
@@ -612,13 +622,15 @@ function onEnd(){
   if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
   holdActive=false;
   if(currentStroke?.length>1){
-    artboard.strokes.push(currentStroke);
+    const snapFill=fillColor,snapStroke=strokeColor;
+    const wrapPts=pts=>({pts,fill:snapFill,stroke:snapStroke});
+    artboard.strokes.push(wrapPts(currentStroke));
     const ab=artboard,cx=ab.w/2,cy=ab.h/2;
     const mirror=s=>s.map(p=>({x:2*cx-p.x,y:p.y}));
     const flip=s=>s.map(p=>({x:p.x,y:2*cy-p.y}));
-    if(symmetryMode==='x'||symmetryMode==='xy') artboard.strokes.push(mirror(currentStroke));
-    if(symmetryMode==='y'||symmetryMode==='xy') artboard.strokes.push(flip(currentStroke));
-    if(symmetryMode==='xy') artboard.strokes.push(mirror(flip(currentStroke)));
+    if(symmetryMode==='x'||symmetryMode==='xy') artboard.strokes.push(wrapPts(mirror(currentStroke)));
+    if(symmetryMode==='y'||symmetryMode==='xy') artboard.strokes.push(wrapPts(flip(currentStroke)));
+    if(symmetryMode==='xy') artboard.strokes.push(wrapPts(mirror(flip(currentStroke))));
   }
   isDrawing=false;currentStroke=null;scheduleRender();
 }
@@ -679,7 +691,7 @@ function growBranches(){
     const bl=radius*(1.5+Math.random()*2.5)*lf,steps=Math.max(3,Math.floor(bl/5));
     const branch=[pt];
     for(let s=1;s<=steps;s++){const t=s/steps;branch.push({x:pt.x+bx*bl*t+(Math.random()-0.5)*radius*0.25,y:pt.y+by*bl*t+(Math.random()-0.5)*radius*0.25});}
-    artboard.strokes.push(branch);
+    artboard.strokes.push({pts:branch,fill:fillColor,stroke:strokeColor});
   }
   scheduleRender();
   if(holdActive&&isDrawing) setTimeout(growBranches,700);
@@ -996,15 +1008,16 @@ function chainSegs(segs){
   }
   return chains;
 }
-function getChains(live){
+function getChains(live,ptsOverride){
   const ab=artboard;
-  const all=live&&currentStroke?[...ab.strokes,currentStroke]:ab.strokes;
+  const rawAll=live&&currentStroke?[...ab.strokes,{pts:currentStroke,fill:fillColor,stroke:strokeColor}]:ab.strokes;
+  const all=ptsOverride||rawAll;
   if(!all.length&&!ab.warpPoints.length) return null;
   const radius=p('radius'),smoothness=p('smooth')/100,loose=p('loose')/100,noiseAmt=p('noise')/100;
   const step=Math.max(3,Math.floor(radius/7));
   const cols=Math.ceil(ab.w/step)+2,rows=Math.ceil(ab.h/step)+2;
   const allPts=[];
-  if(all.length) all.forEach(s=>resample(s,Math.max(2,radius*0.35)).forEach(pt=>allPts.push(pt)));
+  if(all.length) all.forEach(s=>{const pts=s.pts||s;resample(pts,Math.max(2,radius*0.35)).forEach(pt=>allPts.push(pt));});
   const grid=buildField(allPts,radius,cols,rows,step);
   let maxVal=0;
   for(let i=0;i<grid.length;i++) if(grid[i]>maxVal) maxVal=grid[i];
@@ -1054,20 +1067,32 @@ function render(live){
   ctx.restore();
   if(artboard.bgImage){const bi=artboard.bgImage;const bscale=Math.min(artboard.w/bi.width,artboard.h/bi.height);const bw=bi.width*bscale,bh=bi.height*bscale;const bx=artboard.x+(artboard.w-bw)/2,by=artboard.y+(artboard.h-bh)/2;ctx.globalAlpha=0.85;ctx.drawImage(bi,bx+sx-artboard.x*vscale,by+sy-artboard.y*vscale,bw*vscale,bh*vscale);ctx.globalAlpha=1;}
 
-  // clip + draw blobs
-  const chains=getChains(live);
-  if(chains&&chains.length){
+  // clip + draw blobs (per-color groups)
+  {
     const fo=p('opacity')/100,strokeOn=pck('stroke');
     const sw2=p('swidth'),so=p('sopacity')/100;
-    const{r,g,b}=hexToRgb(fillColor),{r:sr,g:sg,b:sb}=hexToRgb(strokeColor);
-    ctx.save();
-    ctx.beginPath();ctx.rect(sx,sy,sw,sh);ctx.clip();
-    ctx.save();ctx.translate(sx,sy);ctx.scale(vscale,vscale);
-    ctx.beginPath();
-    chains.forEach(c=>{smoothPathCtx(ctx,c);ctx.closePath();});
-    if(fo>0){ctx.fillStyle=`rgba(${r},${g},${b},${fo})`;ctx.fill('evenodd');}
-    if(strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${so})`;ctx.lineWidth=sw2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
-    ctx.restore();ctx.restore();
+    // group strokes by fill+stroke color key
+    const rawAll=live&&currentStroke?[...ab.strokes,{pts:currentStroke,fill:fillColor,stroke:strokeColor}]:ab.strokes;
+    const groups=[];const keyMap={};
+    rawAll.forEach(s=>{
+      const key=(s.fill||fillColor)+'|'+(s.stroke||strokeColor);
+      if(!keyMap[key]){keyMap[key]={fill:s.fill||fillColor,stroke:s.stroke||strokeColor,strokes:[]};groups.push(keyMap[key]);}
+      keyMap[key].strokes.push(s);
+    });
+    if(ab.warpPoints.length&&!groups.length) groups.push({fill:fillColor,stroke:strokeColor,strokes:[]});
+    groups.forEach(grp=>{
+      const chains=getChains(false,grp.strokes.length?grp.strokes:null);
+      if(!chains||!chains.length) return;
+      const{r,g,b}=hexToRgb(grp.fill),{r:sr,g:sg,b:sb}=hexToRgb(grp.stroke);
+      ctx.save();
+      ctx.beginPath();ctx.rect(sx,sy,sw,sh);ctx.clip();
+      ctx.save();ctx.translate(sx,sy);ctx.scale(vscale,vscale);
+      ctx.beginPath();
+      chains.forEach(c=>{smoothPathCtx(ctx,c);ctx.closePath();});
+      if(fo>0){ctx.fillStyle=`rgba(${r},${g},${b},${fo})`;ctx.fill('evenodd');}
+      if(strokeOn){ctx.strokeStyle=`rgba(${sr},${sg},${sb},${so})`;ctx.lineWidth=sw2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();}
+      ctx.restore();ctx.restore();
+    });
   }
 
   // draw image edge strokes
