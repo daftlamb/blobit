@@ -1074,7 +1074,7 @@ function render(live){
   {
     const fo=p('opacity')/100,strokeOn=pck('stroke');
     const sw2=p('swidth'),so=p('sopacity')/100;
-    const drawGroups=(strokes,targetCtx,offscreen)=>{
+    const drawGroups=(strokes,targetCtx)=>{
       const groups=[];const keyMap={};
       strokes.forEach(s=>{
         const key=(s.fill||fillColor)+'|'+(s.stroke||strokeColor);
@@ -1082,15 +1082,14 @@ function render(live){
         keyMap[key].strokes.push(s);
       });
       if(ab.warpPoints.length&&!groups.length) groups.push({fill:fillColor,stroke:strokeColor,strokes:[]});
-      const osx=offscreen?0:sx,osy=offscreen?0:sy;
       groups.forEach(grp=>{
         const chains=getChains(false,grp.strokes.length?grp.strokes:null);
         if(!chains||!chains.length) return;
         const{r,g,b}=hexToRgb(grp.fill),{r:sr,g:sg,b:sb}=hexToRgb(grp.stroke);
         targetCtx.save();
-        targetCtx.beginPath();targetCtx.rect(osx,osy,sw,sh);targetCtx.clip();
+        targetCtx.beginPath();targetCtx.rect(sx,sy,sw,sh);targetCtx.clip();
         targetCtx.globalCompositeOperation='multiply';
-        targetCtx.save();targetCtx.translate(osx,osy);targetCtx.scale(vscale,vscale);
+        targetCtx.save();targetCtx.translate(sx,sy);targetCtx.scale(vscale,vscale);
         targetCtx.beginPath();
         chains.forEach(c=>{smoothPathCtx(targetCtx,c);targetCtx.closePath();});
         if(fo>0){targetCtx.fillStyle=`rgba(${r},${g},${b},${fo})`;targetCtx.fill('evenodd');}
@@ -1104,7 +1103,7 @@ function render(live){
       offscreenCache.width=canvas.width;offscreenCache.height=canvas.height;
       const oc=offscreenCache.getContext('2d');
       oc.clearRect(0,0,offscreenCache.width,offscreenCache.height);
-      if(ab.strokes.length||ab.warpPoints.length) drawGroups(ab.strokes,oc,true);
+      if(ab.strokes.length||ab.warpPoints.length) drawGroups(ab.strokes,oc);
       offscreenDirty=false;
     }
     // blit cache
@@ -1112,7 +1111,7 @@ function render(live){
     // draw live stroke on top
     if(live&&currentStroke&&currentStroke.length>1){
       const liveStroke={pts:currentStroke,fill:fillColor,stroke:strokeColor};
-      drawGroups([liveStroke],ctx,false);
+      drawGroups([liveStroke],ctx);
     }
   }
 
