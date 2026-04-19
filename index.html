@@ -347,7 +347,7 @@ let currentStroke=null,isDrawing=false;
 let fillColor='#ff6b9d',strokeColor='#1a1a1a';
 let rafId=null,holdTimer=null,holdActive=false,uploadedImage=null;
 let drawerOpen=false,currentTool='draw',symmetryMode='none';
-let offscreenCache=null,offscreenDirty=true,branchBase=0;
+let offscreenCache=null,offscreenDirty=true,branchBase=0,branchMode=false,branchOrigin=null;
 let warpType='explode'; // 'explode' | 'blob'
 // pan
 let isPanning=false,panStart={x:0,y:0},panOrigin={x:0,y:0},spaceDown=false;
@@ -584,6 +584,13 @@ function onStart(e){
     artboard.warpPoints.push({x:lp.x,y:lp.y,r:80,strength:p('wstrength')/100,type:warpType});
     invalidateCache();return;
   }
+  branchMode=false;branchOrigin=null;if(holdTimer)clearTimeout(holdTimer);
+  if(pck('branch')){
+    const r=p('radius')||20,hitR=r*2/vscale;
+    let hit=null,bestD=Infinity;
+    for(const s of artboard.strokes){const pts=s.pts||s;for(const pt of pts){const d=Math.hypot(pt.x-lp.x,pt.y-lp.y);if(d<hitR&&d<bestD){bestD=d;hit=pt;}}}
+    if(hit){branchMode=true;branchOrigin=hit;holdTimer=setTimeout(growBranches,100);scheduleRender(false);return;}
+  }
   isDrawing=true;holdActive=false;artboard.branchStrokes=[];currentStroke=[{x:lp.x,y:lp.y}];
 }
 
@@ -612,10 +619,11 @@ function onMove(e){
   if(!isDrawing||currentTool!=='draw') return;
   const lp=getLocalPos(e);
   const last=currentStroke[currentStroke.length-1];
-  if((lp.x-last.x)**2+(lp.y-last.y)**2>4/vscale/vscale){currentStroke.push({x:lp.x,y:lp.y});scheduleRender(true);if(pck('branch')&&isDrawing){if(holdTimer)clearTimeout(holdTimer);holdActive=false;holdTimer=setTimeout(()=>{holdActive=true;growBranches();},600);}}
+  if((lp.x-last.x)**2+(lp.y-last.y)**2>4/vscale/vscale){currentStroke.push({x:lp.x,y:lp.y});scheduleRender(true);}
 }
 
 function onEnd(){
+  if(branchMode){branchMode=false;branchOrigin=null;if(holdTimer)clearTimeout(holdTimer);artboard.strokes.push(...artboard.branchStrokes);artboard.branchStrokes=[];offscreenDirty=true;scheduleRender(false);return;}
   if(isPanning){isPanning=false;area.style.cursor=spaceDown?'grab':currentTool==='draw'?'crosshair':'default';}
   if(warpDrag!==null){warpDrag=null;invalidateCache();return;}
   if(!isDrawing) return;
@@ -679,23 +687,24 @@ canvas.addEventListener('touchstart',e=>{
 canvas.addEventListener('touchend',()=>{if(touchHoldTimer){clearTimeout(touchHoldTimer);touchHoldTimer=null;}});
 
 function growBranches(){
-  if(!isDrawing||!currentStroke||currentStroke.length<2) return;
-  const radius=p('radius'),density=p('bdensity')/100,lf=p('blength')/100;
-  const src=currentStroke,num=Math.max(2,Math.floor(src.length*density));
+  if(!branchMode||!branchOrigin) return;
+  const radius=p('radius')||20,lf=p('blength')/100||0.5;
+  const num=2+Math.floor(Math.random()*2);
   for(let b=0;b<num;b++){
-    const idx=Math.floor(Math.random()*(src.length-1)),pt=src[idx];
-    const nx=src[Math.min(idx+1,src.length-1)],px2=src[Math.max(idx-1,0)];
-    const dx=nx.x-px2.x,dy=nx.y-px2.y,len=Math.sqrt(dx*dx+dy*dy)||1;
-    const perpX=-dy/len,perpY=dx/len,angle=(Math.random()-0.5)*Math.PI*0.9;
-    const cos=Math.cos(angle),sin=Math.sin(angle);
-    const bx=perpX*cos-perpY*sin,by=perpX*sin+perpY*cos;
-    const bl=radius*(3+Math.random()*4)*lf,steps=Math.max(5,Math.floor(bl/4));
-    const branch=[pt];
-    for(let s=1;s<=steps;s++){const t=s/steps;branch.push({x:pt.x+bx*bl*t+(Math.random()-0.5)*radius*0.3,y:pt.y+by*bl*t+(Math.random()-0.5)*radius*0.3});}
-    artboard.branchStrokes.push({pts:branch,fill:fillColor,stroke:strokeColor});
+    const angle=Math.random()*Math.PI*2;
+    const bl=radius*(3+Math.random()*4)*lf;
+    const steps=Math.max(6,Math.floor(bl/3));
+    const bx=Math.cos(angle),by=Math.sin(angle);
+    const branch=[{x:branchOrigin.x,y:branchOrigin.y}];
+    for(let s=1;s<=steps;s++){
+      const t=s/steps;
+      const prev=branch[branch.length-1];
+      branch.push({x:prev.x+bx*(bl/steps)+(Math.random()-0.5)*radius*0.25,y:prev.y+by*(bl/steps)+(Math.random()-0.5)*radius*0.25});
+    }
+    artboard.branchStrokes.push({pts:branch,fill:snapFill||fillColor,stroke:snapStroke||strokeColor});
   }
-  invalidateCache();
-  if(holdActive&&isDrawing) setTimeout(growBranches,700);
+  invalidateCache();scheduleRender(false);
+  if(branchMode) holdTimer=setTimeout(growBranches,500);
 }
 
 // ── IMAGE EDGE DETECTION (upgraded) ──
