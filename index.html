@@ -1086,6 +1086,7 @@ function render(live){
       const{r,g,b}=hexToRgb(grp.fill),{r:sr,g:sg,b:sb}=hexToRgb(grp.stroke);
       ctx.save();
       ctx.beginPath();ctx.rect(sx,sy,sw,sh);ctx.clip();
+      ctx.globalCompositeOperation='multiply';
       ctx.save();ctx.translate(sx,sy);ctx.scale(vscale,vscale);
       ctx.beginPath();
       chains.forEach(c=>{smoothPathCtx(ctx,c);ctx.closePath();});
