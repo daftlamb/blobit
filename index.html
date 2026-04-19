@@ -1135,7 +1135,7 @@ function render(live){
   }
 
   // warp point handles
-  if(ab.warpPoints.length){
+  if(ab.warpPoints.length&&currentTool==='warp'){
     ctx.save();ctx.translate(sx,sy);ctx.scale(vscale,vscale);
     ab.warpPoints.forEach((wp,i)=>{
       const isActive=currentTool==='warp';
