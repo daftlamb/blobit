@@ -83,6 +83,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 .tool-btn.active{background:var(--accent);color:#fff;}
 .tool-btn:hover:not(.active){background:#f0f0ec;}
 #topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+#sym-btns{display:flex;align-items:center;gap:2px;margin-left:8px;}
+.sym-btn{background:transparent;border:1px solid var(--border);color:var(--muted);width:26px;height:26px;border-radius:5px;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;}
+.sym-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.sym-btn:hover:not(.active){background:#f0f0ec;}
 #zoom-label{font-size:11px;color:var(--muted);}
 #ab-size-display{font-size:11px;color:var(--muted);cursor:pointer;padding:3px 7px;border-radius:5px;border:1px solid transparent;}
 #ab-size-display:hover{border-color:var(--border);background:#f8f8f4;}
@@ -267,6 +271,12 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
   <div id="topbar">
     <button class="tool-btn active" id="btn-draw">Draw</button>
     <button class="tool-btn" id="btn-warp">Warp</button>
+    <div id="sym-btns">
+      <button class="sym-btn active" id="sym-none" title="No symmetry">✕</button>
+      <button class="sym-btn" id="sym-x" title="Vertical axis (left-right)">|</button>
+      <button class="sym-btn" id="sym-y" title="Horizontal axis (top-bottom)">—</button>
+      <button class="sym-btn" id="sym-xy" title="Both axes">+</button>
+    </div>
     <div id="topbar-right">
       <span id="ab-size-display">800 × 600</span>
       <span id="zoom-label">100%</span>
@@ -336,7 +346,7 @@ let artboard={x:0,y:0,w:800,h:600,strokes:[],warpPoints:[]};
 let currentStroke=null,isDrawing=false;
 let fillColor='#ff6b9d',strokeColor='#1a1a1a';
 let rafId=null,holdTimer=null,holdActive=false,uploadedImage=null;
-let drawerOpen=false,currentTool='draw';
+let drawerOpen=false,currentTool='draw',symmetryMode='none';
 let warpType='explode'; // 'explode' | 'blob'
 // pan
 let isPanning=false,panStart={x:0,y:0},panOrigin={x:0,y:0},spaceDown=false;
@@ -457,6 +467,14 @@ function updateABDisplay(){
 function doClear(){artboard.strokes=[];artboard.warpPoints=[];scheduleRender();}
 document.getElementById('btn-clear')?.addEventListener('click',doClear);
 document.getElementById('m-btn-clear')?.addEventListener('click',doClear);
+// symmetry buttons
+['none','x','y','xy'].forEach(mode=>{
+  document.getElementById('sym-'+mode)?.addEventListener('click',()=>{
+    symmetryMode=mode;
+    document.querySelectorAll('.sym-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('sym-'+mode)?.classList.add('active');
+  });
+});
 document.getElementById('btn-export-png')?.addEventListener('click',exportPNG);
 document.getElementById('btn-export-svg')?.addEventListener('click',exportSVG);
 document.getElementById('m-btn-export-png')?.addEventListener('click',exportPNG);
@@ -593,7 +611,15 @@ function onEnd(){
   if(!isDrawing) return;
   if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
   holdActive=false;
-  if(currentStroke?.length>1) artboard.strokes.push(currentStroke);
+  if(currentStroke?.length>1){
+    artboard.strokes.push(currentStroke);
+    const ab=artboard,cx=ab.w/2,cy=ab.h/2;
+    const mirror=s=>s.map(p=>({x:2*cx-p.x,y:p.y}));
+    const flip=s=>s.map(p=>({x:p.x,y:2*cy-p.y}));
+    if(symmetryMode==='x'||symmetryMode==='xy') artboard.strokes.push(mirror(currentStroke));
+    if(symmetryMode==='y'||symmetryMode==='xy') artboard.strokes.push(flip(currentStroke));
+    if(symmetryMode==='xy') artboard.strokes.push(mirror(flip(currentStroke)));
+  }
   isDrawing=false;currentStroke=null;scheduleRender();
 }
 
