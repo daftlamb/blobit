@@ -341,7 +341,7 @@ const area=document.getElementById('canvas-area');
 // viewport
 let vx=0,vy=0,vscale=1;
 // single artboard
-let artboard={x:0,y:0,w:800,h:600,strokes:[],warpPoints:[]};
+let artboard={x:0,y:0,w:800,h:600,strokes:[],branchStrokes:[],warpPoints:[]};
 // state
 let currentStroke=null,isDrawing=false;
 let fillColor='#ff6b9d',strokeColor='#1a1a1a';
@@ -475,7 +475,7 @@ function updateABDisplay(){
 }
 
 // clear / export
-function doClear(){offscreenDirty=true;artboard.strokes=[];artboard.warpPoints=[];invalidateCache();}
+function doClear(){offscreenDirty=true;artboard.strokes=[];artboard.branchStrokes=[];artboard.warpPoints=[];invalidateCache();}
 document.getElementById('btn-clear')?.addEventListener('click',doClear);
 document.getElementById('m-btn-clear')?.addEventListener('click',doClear);
 // symmetry buttons
@@ -584,7 +584,7 @@ function onStart(e){
     artboard.warpPoints.push({x:lp.x,y:lp.y,r:80,strength:p('wstrength')/100,type:warpType});
     invalidateCache();return;
   }
-  isDrawing=true;holdActive=false;artboard.strokes=artboard.strokes.filter(s=>!s._branch);currentStroke=[{x:lp.x,y:lp.y}];branchBase=artboard.strokes.length;
+  isDrawing=true;holdActive=false;artboard.branchStrokes=[];currentStroke=[{x:lp.x,y:lp.y}];
 }
 
 function onMove(e){
@@ -625,7 +625,7 @@ function onEnd(){
   if(currentStroke?.length>1){
     const snapFill=fillColor,snapStroke=strokeColor;
     const wrapPts=pts=>({pts,fill:snapFill,stroke:snapStroke});
-    artboard.strokes.forEach(s=>delete s._branch);artboard.strokes.push(wrapPts(currentStroke));
+    artboard.strokes.push(...artboard.branchStrokes);artboard.branchStrokes=[];artboard.strokes.push(wrapPts(currentStroke));
     const ab=artboard,cx=ab.w/2,cy=ab.h/2;
     const mirror=s=>s.map(p=>({x:2*cx-p.x,y:p.y}));
     const flip=s=>s.map(p=>({x:p.x,y:2*cy-p.y}));
@@ -692,7 +692,7 @@ function growBranches(){
     const bl=radius*(3+Math.random()*4)*lf,steps=Math.max(5,Math.floor(bl/4));
     const branch=[pt];
     for(let s=1;s<=steps;s++){const t=s/steps;branch.push({x:pt.x+bx*bl*t+(Math.random()-0.5)*radius*0.3,y:pt.y+by*bl*t+(Math.random()-0.5)*radius*0.3});}
-    artboard.strokes.push({pts:branch,fill:fillColor,stroke:strokeColor,_branch:true});
+    artboard.branchStrokes.push({pts:branch,fill:fillColor,stroke:strokeColor});
   }
   invalidateCache();
   if(holdActive&&isDrawing) setTimeout(growBranches,700);
@@ -1110,7 +1110,7 @@ function render(live){
     // draw live stroke on top
     if(live&&currentStroke&&currentStroke.length>1){
       const liveStroke={pts:currentStroke,fill:fillColor,stroke:strokeColor};
-      drawGroups([liveStroke],ctx);
+      drawGroups([liveStroke],ctx);if(ab.branchStrokes&&ab.branchStrokes.length)drawGroups(ab.branchStrokes,ctx);
     }
   }
 
