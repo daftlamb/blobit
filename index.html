@@ -584,7 +584,7 @@ function onStart(e){
     artboard.warpPoints.push({x:lp.x,y:lp.y,r:80,strength:p('wstrength')/100,type:warpType});
     invalidateCache();return;
   }
-  isDrawing=true;holdActive=false;currentStroke=[{x:lp.x,y:lp.y}];
+  isDrawing=true;holdActive=false;artboard.strokes=artboard.strokes.filter(s=>!s._branch);currentStroke=[{x:lp.x,y:lp.y}];
   if(pck('branch')) holdTimer=setTimeout(()=>{holdActive=true;growBranches();},500);
 }
 
@@ -626,7 +626,7 @@ function onEnd(){
   if(currentStroke?.length>1){
     const snapFill=fillColor,snapStroke=strokeColor;
     const wrapPts=pts=>({pts,fill:snapFill,stroke:snapStroke});
-    artboard.strokes.push(wrapPts(currentStroke));
+    artboard.strokes.forEach(s=>delete s._branch);artboard.strokes.push(wrapPts(currentStroke));
     const ab=artboard,cx=ab.w/2,cy=ab.h/2;
     const mirror=s=>s.map(p=>({x:2*cx-p.x,y:p.y}));
     const flip=s=>s.map(p=>({x:p.x,y:2*cy-p.y}));
@@ -682,7 +682,7 @@ canvas.addEventListener('touchend',()=>{if(touchHoldTimer){clearTimeout(touchHol
 function growBranches(){
   if(!isDrawing||!currentStroke||currentStroke.length<2) return;
   const radius=p('radius'),density=p('bdensity')/100,lf=p('blength')/100;
-  const src=currentStroke,num=Math.max(1,Math.floor(src.length*density*0.25));
+  const src=currentStroke,num=Math.max(2,Math.floor(src.length*density));
   for(let b=0;b<num;b++){
     const idx=Math.floor(Math.random()*(src.length-1)),pt=src[idx];
     const nx=src[Math.min(idx+1,src.length-1)],px2=src[Math.max(idx-1,0)];
@@ -690,10 +690,10 @@ function growBranches(){
     const perpX=-dy/len,perpY=dx/len,angle=(Math.random()-0.5)*Math.PI*0.9;
     const cos=Math.cos(angle),sin=Math.sin(angle);
     const bx=perpX*cos-perpY*sin,by=perpX*sin+perpY*cos;
-    const bl=radius*(1.5+Math.random()*2.5)*lf,steps=Math.max(3,Math.floor(bl/5));
+    const bl=radius*(3+Math.random()*4)*lf,steps=Math.max(5,Math.floor(bl/4));
     const branch=[pt];
-    for(let s=1;s<=steps;s++){const t=s/steps;branch.push({x:pt.x+bx*bl*t+(Math.random()-0.5)*radius*0.25,y:pt.y+by*bl*t+(Math.random()-0.5)*radius*0.25});}
-    artboard.strokes.push({pts:branch,fill:fillColor,stroke:strokeColor});
+    for(let s=1;s<=steps;s++){const t=s/steps;branch.push({x:pt.x+bx*bl*t+(Math.random()-0.5)*radius*0.3,y:pt.y+by*bl*t+(Math.random()-0.5)*radius*0.3});}
+    artboard.strokes.push({pts:branch,fill:fillColor,stroke:strokeColor,_branch:true});
   }
   invalidateCache();
   if(holdActive&&isDrawing) setTimeout(growBranches,700);
