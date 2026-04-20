@@ -347,7 +347,7 @@ let currentStroke=null,isDrawing=false;
 let fillColor='#ff6b9d',strokeColor='#1a1a1a';
 let rafId=null,holdTimer=null,holdActive=false,uploadedImage=null;
 let drawerOpen=false,currentTool='draw',symmetryMode='none';
-let offscreenCache=null,offscreenDirty=true,branchBase=0,branchMode=false,branchOrigin=null;
+let offscreenCache=null,offscreenDirty=true,branchBase=0,branchMode=false,branchOrigin=null,refImage=null;
 let warpType='explode'; // 'explode' | 'blob'
 // pan
 let isPanning=false,panStart={x:0,y:0},panOrigin={x:0,y:0},spaceDown=false;
@@ -1238,6 +1238,15 @@ ${edgePaths}
   centerView();
   updateABDisplay();
 })();
+
+// ref image
+document.getElementById('inp-ref').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const img=new Image();img.onload=()=>{refImage=img;scheduleRender(false);};
+  img.src=URL.createObjectURL(f);
+});
+document.getElementById('sl-refopacity').addEventListener('input',()=>scheduleRender(false));
+function clearRef(){refImage=null;document.getElementById('inp-ref').value='';scheduleRender(false);}
 </script>
 </body>
 </html>
