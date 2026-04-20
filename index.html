@@ -372,7 +372,7 @@ function bindSlider(id,valId){
   sl.addEventListener('input',()=>{vl.textContent=sl.value;invalidateCache();});
 }
 ['radius','smooth','loose','noise','opacity','swidth','sopacity','bdensity','blength',
- 'esens','edetail','eblur','emin','ejitter','ejitter','wstrength'].forEach(n=>{
+ 'esens','edetail','eblur','emin','ejitter','esmooth','eextend','ebridge','ejitter','wstrength'].forEach(n=>{
   bindSlider('sl-'+n,'val-'+n);
   bindSlider('m-sl-'+n,'m-val-'+n);
 });
