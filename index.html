@@ -1134,8 +1134,37 @@ function render(live){
     const smooth=parseInt(document.getElementById('sl-esmooth')?.value||0);
     const extend=parseInt(document.getElementById('sl-eextend')?.value||0);
     const bridge=parseInt(document.getElementById('sl-ebridge')?.value||0);
+    // bridge: merge strokes whose endpoints are within bridge px of each other
+    let workStrokes=ab.edgeStrokes.map(s=>s.slice());
+    if(bridge>0){
+      let merged=true;
+      while(merged){
+        merged=false;
+        outer:for(let i=0;i<workStrokes.length;i++){
+          for(let j=i+1;j<workStrokes.length;j++){
+            const a=workStrokes[i],b=workStrokes[j];
+            const ends=[
+              {ai:a.length-1,bi:0,rev:false},   // a-end → b-start
+              {ai:a.length-1,bi:b.length-1,rev:true},  // a-end → b-end
+              {ai:0,bi:0,rev:false,prepend:true},       // a-start → b-start
+              {ai:0,bi:b.length-1,rev:true,prepend:true} // a-start → b-end
+            ];
+            for(const e of ends){
+              const pa=a[e.ai],pb=b[e.bi];
+              const dist=Math.sqrt((pa.x-pb.x)**2+(pa.y-pb.y)**2);
+              if(dist<=bridge){
+                const bPts=e.rev?b.slice().reverse():b.slice();
+                const joined=e.prepend?[...bPts,...a]:[...a,...bPts];
+                workStrokes.splice(j,1);workStrokes.splice(i,1,joined);
+                merged=true;break outer;
+              }
+            }
+          }
+        }
+      }
+    }
     ctx.lineWidth=1;ctx.lineJoin='round';ctx.lineCap='round';
-    ab.edgeStrokes.forEach((s,si)=>{
+    workStrokes.forEach((s,si)=>{
       if(s.length<2)return;
       // smooth
       let pts=s;
