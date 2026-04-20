@@ -226,6 +226,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 
     <div class="divider"></div>
     <div class="sec">
+      <div class="sec-title">Trace Ref</div>
+      <div class="upload-zone" id="trace-upload-area">Click or drop reference image</div>
+      <input type="file" id="trace-file-input" accept="image/*" style="display:none">
+      <div class="row"><label>Opacity</label><span class="val" id="val-trace-opacity">40</span></div>
+      <input type="range" id="sl-trace-opacity" min="0" max="100" value="40">
+      <button class="btn" id="btn-clear-trace" style="margin-top:4px">Clear Ref</button>
+    </div>
+
+    <div class="divider"></div>
+    <div class="sec">
       <div class="sec-title">Image → Blob</div>
       <div class="upload-zone" id="upload-area">Click or drop image</div>
       <input type="file" id="file-input" accept="image/*" style="display:none">
@@ -351,7 +361,7 @@ let artboard={x:0,y:0,w:800,h:600,strokes:[],branchStrokes:[],warpPoints:[]};
 // state
 let currentStroke=null,isDrawing=false;
 let fillColor='#ff6b9d',strokeColor='#1a1a1a';
-let rafId=null,holdTimer=null,holdActive=false,uploadedImage=null;
+let rafId=null,holdTimer=null,holdActive=false,uploadedImage=null,traceImage=null,isExporting=false;
 let drawerOpen=false,currentTool='draw',symmetryMode='none';
 let offscreenCache=null,offscreenDirty=true,branchBase=0,branchMode=false,branchOrigin=null,refImage=null;
 let warpType='explode'; // 'explode' | 'blob'
@@ -508,6 +518,20 @@ document.querySelectorAll('.ecs').forEach(el=>{
   });
 });
 
+// trace ref upload
+const traceUploadArea=document.getElementById('trace-upload-area'),traceFileInput=document.getElementById('trace-file-input');
+traceUploadArea?.addEventListener('click',()=>traceFileInput.click());
+traceUploadArea?.addEventListener('dragover',e=>e.preventDefault());
+traceUploadArea?.addEventListener('drop',e=>{e.preventDefault();handleTraceFile(e.dataTransfer.files[0]);});
+traceFileInput?.addEventListener('change',e=>handleTraceFile(e.target.files[0]));
+document.getElementById('btn-clear-trace')?.addEventListener('click',()=>{traceImage=null;scheduleRender();});
+document.getElementById('sl-trace-opacity')?.addEventListener('input',function(){document.getElementById('val-trace-opacity').textContent=this.value;scheduleRender();});
+function handleTraceFile(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  const reader=new FileReader();
+  reader.onload=ev=>{const img=new Image();img.onload=()=>{traceImage=img;scheduleRender();};img.src=ev.target.result;};
+  reader.readAsDataURL(file);
+}
 // image upload
 const uploadArea=document.getElementById('upload-area'),fileInput=document.getElementById('file-input');
 uploadArea?.addEventListener('click',()=>fileInput.click());
@@ -1082,6 +1106,15 @@ function render(live){
   ctx.shadowColor='rgba(0,0,0,0.10)';ctx.shadowBlur=24;ctx.shadowOffsetY=6;
   ctx.fillStyle='#fff';ctx.fillRect(sx,sy,sw,sh);if(artboard.bgImage){const _bi=artboard.bgImage;const _bs=Math.min(artboard.w/_bi.width,artboard.h/_bi.height);const _bw=_bi.width*_bs,_bh=_bi.height*_bs;const _bx=artboard.x+(artboard.w-_bw)/2,_by=artboard.y+(artboard.h-_bh)/2;ctx.globalAlpha=0.9;ctx.drawImage(_bi,_bx,_by,_bw,_bh);ctx.globalAlpha=1;};
   ctx.restore();
+  // trace reference image (screen only, not exported)
+  if(traceImage&&!isExporting){
+    const ti=traceImage,ts=Math.min(artboard.w/ti.width,artboard.h/ti.height);
+    const tw=ti.width*ts,th=ti.height*ts;
+    const tx=sx+(artboard.w-tw)/2*vscale,ty=sy+(artboard.h-th)/2*vscale;
+    ctx.globalAlpha=(parseInt(document.getElementById('sl-trace-opacity')?.value||40)/100);
+    ctx.drawImage(ti,tx,ty,tw*vscale,th*vscale);
+    ctx.globalAlpha=1;
+  }
   if(artboard.bgImage){const bi=artboard.bgImage;const bscale=Math.min(artboard.w/bi.width,artboard.h/bi.height);const bw=bi.width*bscale,bh=bi.height*bscale;const bx=artboard.x+(artboard.w-bw)/2,by=artboard.y+(artboard.h-bh)/2;ctx.globalAlpha=0.85;ctx.drawImage(bi,bx+sx-artboard.x*vscale,by+sy-artboard.y*vscale,bw*vscale,bh*vscale);ctx.globalAlpha=1;}
 
   // clip + draw blobs (per-color groups, with offscreen cache)
