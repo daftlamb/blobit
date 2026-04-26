@@ -88,10 +88,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 .sym-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 .sym-btn:hover:not(.active){background:#f0f0ec;}
 .support-btn{
-  background:#fff7ee;border:1px solid #f1cda6;color:#a45a0a;padding:5px 10px;border-radius:999px;
+  background:#e07820;border:1px solid #e07820;color:#fff;padding:5px 10px;border-radius:999px;
   cursor:pointer;font-size:11px;font-weight:600;line-height:1;white-space:nowrap;transition:background .15s,border-color .15s,color .15s;
 }
-.support-btn:hover{background:#fff0de;border-color:#e7b781;color:#8a4906;}
+.support-btn:hover{background:#c96512;border-color:#c96512;color:#fff;}
 #zoom-label{font-size:11px;color:var(--muted);}
 #ab-size-display{font-size:11px;color:var(--muted);cursor:pointer;padding:3px 7px;border-radius:5px;border:1px solid transparent;}
 #ab-size-display:hover{border-color:var(--border);background:#f8f8f4;}
@@ -1360,14 +1360,18 @@ ${edgePaths}
   updateABDisplay();
 })();
 
-// ref image
-document.getElementById('inp-ref').addEventListener('change',e=>{
-  const f=e.target.files[0];if(!f)return;
-  const img=new Image();img.onload=()=>{refImage=img;scheduleRender(false);};
-  img.src=URL.createObjectURL(f);
-});
-document.getElementById('sl-refopacity').addEventListener('input',()=>scheduleRender(false));
-function clearRef(){refImage=null;document.getElementById('inp-ref').value='';scheduleRender(false);}
+// legacy ref image bindings: guard in case these controls are absent
+const inpRef=document.getElementById('inp-ref');
+if(inpRef){
+  inpRef.addEventListener('change',e=>{
+    const f=e.target.files[0];if(!f)return;
+    const img=new Image();img.onload=()=>{refImage=img;scheduleRender(false);};
+    img.src=URL.createObjectURL(f);
+  });
+}
+const refOpacityInput=document.getElementById('sl-refopacity');
+if(refOpacityInput) refOpacityInput.addEventListener('input',()=>scheduleRender(false));
+function clearRef(){refImage=null;if(inpRef) inpRef.value='';scheduleRender(false);}
 
 const supportBtn=document.getElementById('btn-support');
 const supportModal=document.getElementById('support-modal');
