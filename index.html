@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -12,7 +12,7 @@
 }
 body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;height:100dvh;overflow:hidden;display:flex;font-size:13px;}
 
-/* ── SIDEBAR ── */
+/* 鈹€鈹€ SIDEBAR 鈹€鈹€ */
 #sidebar{
   width:var(--panel-w);flex-shrink:0;background:var(--panel);
   border-right:1px solid var(--border);display:flex;flex-direction:column;
@@ -73,7 +73,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 .warp-type button{flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:#f8f8f4;font-size:11px;cursor:pointer;color:var(--accent2);}
 .warp-type button.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 
-/* ── MAIN ── */
+/* 鈹€鈹€ MAIN 鈹€鈹€ */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 #topbar{
   height:42px;flex-shrink:0;background:var(--panel);border-bottom:1px solid var(--border);
@@ -83,6 +83,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 .tool-btn.active{background:var(--accent);color:#fff;}
 .tool-btn:hover:not(.active){background:#f0f0ec;}
 #topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.support-btn{background:#fff;border:1px solid var(--border);color:var(--accent2);padding:5px 12px;border-radius:999px;cursor:pointer;font-size:11px;font-weight:600;}
+.support-btn:hover{background:#f7f7f3;}
 #sym-btns{display:flex;align-items:center;gap:2px;margin-left:8px;}
 .sym-btn{background:transparent;border:1px solid var(--border);color:var(--muted);width:26px;height:26px;border-radius:5px;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;}
 .sym-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
@@ -93,7 +95,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 #canvas-area{flex:1;position:relative;overflow:hidden;}
 #main-canvas{display:block;width:100%;height:100%;touch-action:none;}
 
-/* ── MOBILE ── */
+/* 鈹€鈹€ MOBILE 鈹€鈹€ */
 @media(max-width:767px){
   body{flex-direction:column;}
   #sidebar{display:none;}
@@ -124,6 +126,16 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 @media(min-width:768px){
   #mobile-bar,#quick-bar,#m-drawer{display:none!important;}
 }
+
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;padding:20px}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px 20px 18px;max-width:360px;width:100%;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.14)}
+.modal-close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer}
+.modal-close:hover{color:var(--text)}
+.modal-box h3{font-size:15px;font-weight:700;margin-bottom:10px}
+.modal-box p{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:8px}
+.support-qr{width:min(240px,80vw);aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--border);display:block;margin:12px auto 14px;background:#fff}
+.support-note{margin-top:8px;padding-top:10px;border-top:1px solid var(--border)}
+.support-note p{margin-bottom:6px}
 
 /* warp handle overlay (canvas-space, drawn via canvas) */
 
@@ -194,7 +206,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
       </div>
       <div class="row"><label>Strength</label><span class="val" id="val-wstrength">60</span></div>
       <input type="range" id="sl-wstrength" min="1" max="100" value="60">
-      <p class="hint">Warp mode · click to place · drag center to move · drag ring to resize · right-click to delete</p>
+      <p class="hint">Warp mode 路 click to place 路 drag center to move 路 drag ring to resize 路 right-click to delete</p>
     </div>
 
     <div class="divider"></div>
@@ -211,14 +223,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
     <div class="sec">
       <div class="sec-title">Artboard</div>
       <div class="ab-presets">
-        <button class="ab-pre" data-w="800" data-h="600">800×600</button>
-        <button class="ab-pre" data-w="1080" data-h="1080">1080²</button>
-        <button class="ab-pre" data-w="1920" data-h="1080">1920×1080</button>
+        <button class="ab-pre" data-w="800" data-h="600">800脳600</button>
+        <button class="ab-pre" data-w="1080" data-h="1080">1080虏</button>
+        <button class="ab-pre" data-w="1920" data-h="1080">1920脳1080</button>
         <button class="ab-pre" data-w="595" data-h="842">A4</button>
       </div>
       <div class="ab-size-row">
         <input type="number" id="ab-w" value="800" min="100" max="4000">
-        <span>×</span>
+        <span>脳</span>
         <input type="number" id="ab-h" value="600" min="100" max="4000">
         <button class="btn" style="width:auto;padding:5px 10px;margin:0" id="btn-ab-apply">Apply</button>
       </div>
@@ -236,7 +248,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
 
     <div class="divider"></div>
     <div class="sec">
-      <div class="sec-title">Image → Blob</div>
+      <div class="sec-title">Image 鈫?Blob</div>
       <div class="upload-zone" id="upload-area">Click or drop image</div>
       <input type="file" id="file-input" accept="image/*" style="display:none">
       <img id="img-preview">
@@ -288,13 +300,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
     <button class="tool-btn active" id="btn-draw">Draw</button>
     <button class="tool-btn" id="btn-warp">Warp</button>
     <div id="sym-btns">
-      <button class="sym-btn active" id="sym-none" title="No symmetry">✕</button>
+      <button class="sym-btn active" id="sym-none" title="No symmetry">鉁?/button>
       <button class="sym-btn" id="sym-x" title="Vertical axis (left-right)">|</button>
-      <button class="sym-btn" id="sym-y" title="Horizontal axis (top-bottom)">—</button>
+      <button class="sym-btn" id="sym-y" title="Horizontal axis (top-bottom)">鈥?/button>
       <button class="sym-btn" id="sym-xy" title="Both axes">+</button>
     </div>
     <div id="topbar-right">
-      <span id="ab-size-display">800 × 600</span>
+      <button class="support-btn" id="btn-support">Support me / 支持我</button>
+      <span id="ab-size-display">800 x 600</span>
       <span id="zoom-label">100%</span>
     </div>
   </div>
@@ -302,7 +315,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
     <div id="mobile-bar">
       <button class="tool-btn active" id="m-btn-draw">Draw</button>
       <button class="tool-btn" id="m-btn-warp">Warp</button>
-      <button class="tool-btn" id="m-btn-clear">✕</button>
+      <button class="tool-btn" id="m-btn-clear">鉁?/button>
     </div>
     <canvas id="main-canvas"></canvas>
   </div>
@@ -315,7 +328,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-bottom:5px;height
   <div class="sw" style="background:#43e97b" data-color="#43e97b"></div>
   <div class="sw" style="background:#1a1a1a" data-color="#1a1a1a"></div>
   <input type="color" id="m-fill-color" value="#ff6b9d">
-  <button id="m-panel-toggle">⋯</button>
+  <button id="m-panel-toggle">鈰?/button>
 </div>
 
 <!-- MOBILE DRAWER -->
@@ -463,7 +476,7 @@ area.addEventListener('mouseup',e=>{
 document.getElementById('m-panel-toggle')?.addEventListener('click',()=>{
   drawerOpen=!drawerOpen;
   document.getElementById('m-drawer').classList.toggle('open',drawerOpen);
-  document.getElementById('m-panel-toggle').textContent=drawerOpen?'✕':'⋯';
+  document.getElementById('m-panel-toggle').textContent=drawerOpen?'鉁?:'鈰?;
 });
 
 // artboard size
@@ -487,7 +500,7 @@ document.getElementById('ab-size-display')?.addEventListener('click',()=>{
 });
 function updateABDisplay(){
   const el=document.getElementById('ab-size-display');
-  if(el) el.textContent=`${artboard.w} × ${artboard.h}`;
+  if(el) el.textContent=`${artboard.w} 脳 ${artboard.h}`;
 }
 
 // clear / export
@@ -737,7 +750,7 @@ function growBranches(){
   if(branchMode) holdTimer=setTimeout(growBranches,500);
 }
 
-// ── IMAGE EDGE DETECTION (upgraded) ──
+// 鈹€鈹€ IMAGE EDGE DETECTION (upgraded) 鈹€鈹€
 function gaussianBlur(gray,w,h,sigma){
   if(sigma<=0) return gray;
   const r=Math.ceil(sigma*2),size=2*r+1,k=new Float32Array(size);
@@ -1180,10 +1193,10 @@ function render(live){
           for(let j=i+1;j<workStrokes.length;j++){
             const a=workStrokes[i],b=workStrokes[j];
             const ends=[
-              {ai:a.length-1,bi:0,rev:false},   // a-end → b-start
-              {ai:a.length-1,bi:b.length-1,rev:true},  // a-end → b-end
-              {ai:0,bi:0,rev:false,prepend:true},       // a-start → b-start
-              {ai:0,bi:b.length-1,rev:true,prepend:true} // a-start → b-end
+              {ai:a.length-1,bi:0,rev:false},   // a-end 鈫?b-start
+              {ai:a.length-1,bi:b.length-1,rev:true},  // a-end 鈫?b-end
+              {ai:0,bi:0,rev:false,prepend:true},       // a-start 鈫?b-start
+              {ai:0,bi:b.length-1,rev:true,prepend:true} // a-start 鈫?b-end
             ];
             for(const e of ends){
               const pa=a[e.ai],pb=b[e.bi];
@@ -1246,7 +1259,7 @@ function render(live){
       if(isActive&&vscale>0.4){
         ctx.font=`${11/vscale}px Inter,system-ui,sans-serif`;
         ctx.fillStyle='rgba(0,0,0,0.4)';
-        ctx.fillText(wp.type==='explode'?'✦':'●',wp.x+8/vscale,wp.y-8/vscale);
+        ctx.fillText(wp.type==='explode'?'鉁?:'鈼?,wp.x+8/vscale,wp.y-8/vscale);
       }
     });
     ctx.restore();
@@ -1257,7 +1270,7 @@ function render(live){
     ctx.save();
     ctx.font=`${Math.max(10,11*vscale)}px Inter,system-ui,sans-serif`;
     ctx.fillStyle='rgba(0,0,0,0.25)';
-    ctx.fillText(`${ab.w} × ${ab.h}`,sx,sy-7*vscale);
+    ctx.fillText(`${ab.w} 脳 ${ab.h}`,sx,sy-7*vscale);
     ctx.restore();
   }
 }
@@ -1330,6 +1343,25 @@ document.getElementById('inp-ref').addEventListener('change',e=>{
 });
 document.getElementById('sl-refopacity').addEventListener('input',()=>scheduleRender(false));
 function clearRef(){refImage=null;document.getElementById('inp-ref').value='';scheduleRender(false);}
+document.getElementById('btn-support').addEventListener('click',()=>{document.getElementById('support-modal').style.display='flex';});
+document.getElementById('support-close').addEventListener('click',()=>{document.getElementById('support-modal').style.display='none';});
+document.getElementById('support-modal').addEventListener('click',e=>{if(e.target===document.getElementById('support-modal'))document.getElementById('support-modal').style.display='none';});
 </script>
+<div class="modal-backdrop" id="support-modal">
+  <div class="modal-box" style="text-align:center">
+    <button class="modal-close" id="support-close">&#10005;</button>
+    <h3>Support me / 支持我</h3>
+    <p>If Blob It helps your experiments, you can support future updates here.</p>
+    <p>如果这个工具对你有帮助，可以扫这个码支持我继续更新。</p>
+    <img src="assets/support-qr.png" class="support-qr" alt="Support QR">
+    <div class="support-note">
+      <p>Tip: draw or upload, tune the blob shape, then export PNG or SVG.</p>
+      <p>小提示：先画，或者上传图片转 blob，再调形状，最后导出 PNG 或 SVG。</p>
+    </div>
+  </div>
+</div>
 </body>
 </html>
+
+
+
